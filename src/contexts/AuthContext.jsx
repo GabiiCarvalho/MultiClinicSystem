@@ -1,74 +1,119 @@
-import { createContext, useContext, useState } from 'react';
+// src/contexts/AuthContext.jsx
+import { createContext, useContext, useState, useEffect } from 'react';
+import api from '../services/api';
 
-// Cria o contexto
 export const AuthContext = createContext();
 
-// Provider component
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
-  const [users, setUsers] = useState([
-    {
-      id: 1,
-      email: 'proprietario@email.com',
-      password: 'admin123',
-      name: 'Proprietário',
-      role: 'owner'
-    },
-    {
-      id: 2,
-      email: 'funcionario@email.com',
-      password: 'func123',
-      name: 'Funcionário',
-      role: 'employee'
-    }
-  ]);
+  const [petshopName, setPetshopName] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
-  const login = (email, password) => {
-    const foundUser = users.find(u => u.email === email && u.password === password);
-    if (foundUser) {
-      setUser(foundUser);
-      return true;
+  // Verificar se usuário está logado ao carregar - CORRIGIDO
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    const userData = localStorage.getItem('user');
+
+    console.log('🔍 AuthContext - Token:', token);
+    console.log('🔍 AuthContext - UserData:', userData);
+
+
+    if (token && userData) {
+      try {
+        // Verifica se userData é um JSON válido antes de fazer parse
+        const parsedUser = JSON.parse(userData);
+        if (parsedUser && typeof parsedUser === 'object') {
+          setUser(parsedUser);
+          api.defaults.headers.Authorization = `Bearer ${token}`;
+        }
+      } catch (error) {
+        console.error('Erro ao parsear user data:', error);
+        // Limpa dados inválidos
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+      }
     }
-    return false;
+  }, []);
+
+  // Função de login
+  const login = async (email, senha) => {
+    setIsLoading(true);
+    try {
+      const response = await api.post('/auth/login', {
+        email,
+        senha
+      });
+
+      const { usuario, token, loja_nome } = response.data;
+
+      // Salvar dados - CORRIGIDO (verifica se usuario existe)
+      if (usuario && token) {
+        localStorage.setItem('token', token);
+        localStorage.setItem('user', JSON.stringify(usuario));
+        setUser(usuario);
+        setPetshopName(loja_nome || '');
+
+        // Configurar token nas requisições
+        api.defaults.headers.Authorization = `Bearer ${token}`;
+
+        return true;
+      } else {
+        throw new Error('Dados de login inválidos');
+      }
+    } catch (error) {
+      const errorMessage = error.response?.data?.error || error.message || 'Erro ao fazer login';
+      throw new Error(errorMessage);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
+  // Função de cadastro
+  const register = async (formData) => {
+    setIsLoading(true);
+    try {
+      const response = await api.post('/auth/cadastrar-proprietario', {
+        name: formData.name,
+        email: formData.email,
+        password: formData.password,
+        confirmPassword: formData.confirmPassword,
+        phone: formData.phone,
+        cnpj: formData.cnpj,
+        address: formData.address,
+        petshopName: formData.petshopName
+      });
+
+      return response.data;
+    } catch (error) {
+      const errorMessage = error.response?.data?.error || error.message || 'Erro ao cadastrar';
+      throw new Error(errorMessage);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Função de logout
   const logout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    localStorage.removeItem('petshopName');
     setUser(null);
-  };
-
-  const addUser = (newUser) => {
-    const userWithId = {
-      ...newUser,
-      id: Date.now()
-    };
-    setUsers([...users, userWithId]);
-  };
-
-  const updateUser = (id, updatedUser) => {
-    setUsers(users.map(u => u.id === id ? { ...u, ...updatedUser } : u));
-  };
-
-  const deleteUser = (id) => {
-    setUsers(users.filter(u => u.id !== id));
+    setPetshopName('');
+    delete api.defaults.headers.Authorization;
   };
 
   return (
-    <AuthContext.Provider value={{ 
-      user, 
-      users, 
-      login, 
-      logout, 
-      addUser, 
-      updateUser, 
-      deleteUser,
-      petshopName: "Meu Petshop" 
+    <AuthContext.Provider value={{
+      user,
+      petshopName,
+      isLoading,
+      login,
+      register,
+      logout
     }}>
       {children}
     </AuthContext.Provider>
   );
 };
 
-// Hook personalizado para usar o contexto
-export const useAuth = () => {
-  return useContext(AuthContext);
-};
+export const useAuth = () => useContext(AuthContext);

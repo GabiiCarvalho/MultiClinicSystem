@@ -1,3 +1,9 @@
+# Variáveis de ambiente
+.env
+.env.local
+.env.development
+.env.test
+
 # Logs
 logs
 *.log

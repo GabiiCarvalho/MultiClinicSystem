@@ -18,6 +18,7 @@ import EventIcon from '@mui/icons-material/Event';
 import PeopleIcon from '@mui/icons-material/People';
 import LoginScreen from '../components/LoginScreen';
 import Settings from "../components/Settings";
+import AuthScreen from "../components/AuthScreen";
 
 function TabPanel(props) {
   const { children, value, index, ...other } = props;
@@ -46,7 +47,7 @@ const MainTabs = () => {
 
   const { user } = useContext(AuthContext);
   if (!user) {
-    return <LoginScreen />;
+    return <AuthScreen />;
   }
 
   const clients = pets.reduce((acc, pet) => {
@@ -409,7 +410,7 @@ const MainTabs = () => {
     { label: "Configurações", content: <Settings /> }
   ];
 
-  const tabs = user.role === 'owner' ? ownerTabs : employeeTabs;
+  const tabs = user.cargo === 'proprietario' ? ownerTabs : employeeTabs;
 
   return (
     <Box sx={{ width: '100%' }}>

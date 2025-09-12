@@ -1,43 +1,37 @@
 import { useState, useContext } from 'react';
 import { AuthContext } from '../contexts/AuthContext';
 import { 
-  Box, 
-  Paper, 
-  Typography, 
-  TextField, 
-  Button, 
-  CircularProgress,
-  Alert
+  Box, Paper, Typography, TextField, Button, 
+  CircularProgress, Alert 
 } from '@mui/material';
 
-const LoginScreen = () => {
+const LoginScreen = ({ onSwitchToRegister }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const { login, isLoading } = useContext(AuthContext);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    setError('');
+
     if (!email || !password) {
       setError('Preencha todos os campos');
       return;
     }
-    setError('');
-    login(email, password);
+
+    try {
+      await login(email, password);
+      // Login bem-sucedido - o redirecionamento é feito automaticamente
+    } catch (err) {
+      setError(err.message);
+    }
   };
 
   return (
-    <Box
-      sx={{
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        minHeight: '100vh',
-        backgroundColor: '#f5f5f5'
-      }}
-    >
-      <Paper sx={{ p: 4, width: 400, maxWidth: '90%' }}>
-        <Typography variant="h4" gutterBottom align="center" sx={{ mb: 3 }}>
+    <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh' }}>
+      <Paper sx={{ p: 4, width: 400 }}>
+        <Typography variant="h4" gutterBottom align="center">
           Login Petshop
         </Typography>
         
@@ -51,6 +45,7 @@ const LoginScreen = () => {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             sx={{ mb: 2 }}
+            required
           />
           
           <TextField
@@ -60,6 +55,7 @@ const LoginScreen = () => {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             sx={{ mb: 3 }}
+            required
           />
           
           <Button
@@ -73,10 +69,9 @@ const LoginScreen = () => {
           </Button>
         </form>
 
-        <Typography variant="body2" sx={{ mt: 3, textAlign: 'center' }}>
-          Email: proprietario@email.com (acesso total)<br />
-          Email: funcionario@email.com (acesso limitado)
-        </Typography>
+        <Button fullWidth sx={{ mt: 2 }} onClick={onSwitchToRegister}>
+          Não tem conta? Cadastre seu Petshop
+        </Button>
       </Paper>
     </Box>
   );
