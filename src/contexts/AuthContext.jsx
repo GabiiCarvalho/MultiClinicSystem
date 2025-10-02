@@ -9,7 +9,6 @@ export const AuthProvider = ({ children }) => {
   const [petshopName, setPetshopName] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  // Verificar se usuário está logado ao carregar - CORRIGIDO
   useEffect(() => {
     const token = localStorage.getItem('token');
     const userData = localStorage.getItem('user');
@@ -40,11 +39,14 @@ export const AuthProvider = ({ children }) => {
     setIsLoading(true);
     try {
       const response = await api.post('/auth/login', {
-        email,
-        senha
+        email: email.trim(),
+        senha: senha
       });
 
-      const { usuario, token, loja_nome } = response.data;
+      console.log('Resposta completa:', response);
+      console.log('Dados da resposta:', response.data);
+
+      const { token, usuario, loja_nome } = response.data;
 
       // Salvar dados - CORRIGIDO (verifica se usuario existe)
       if (usuario && token) {
