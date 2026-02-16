@@ -1,17 +1,17 @@
 import { useState, useContext, useMemo } from "react";
-import { PetsContext } from "../contexts/PetsContext";
+import { PatientsContext } from "../contexts/PatientsContext";
 import {
   Box, Typography, Paper, Chip,
   Tabs, Tab, Button, ButtonGroup,
   Dialog, DialogTitle, DialogContent, DialogActions,
   Avatar, useTheme, TextField, MenuItem
 } from "@mui/material";
-import { Grid } from '@mui/material'; // Importação atualizada do Grid
+import { Grid } from '@mui/material'; 
 import {
   format, isSameDay, isSameWeek, isSameMonth,
   parseISO, eachDayOfInterval, startOfWeek,
   endOfWeek, startOfMonth, endOfMonth, addDays,
-  isToday, isWeekend, addMinutes
+  isToday, isWeekend
 } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { LocalizationProvider } from '@mui/x-date-pickers';
@@ -24,10 +24,10 @@ import EditIcon from '@mui/icons-material/Edit';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 
 const Calendar = () => {
-  const { pets, startService, completeService, updatePetSchedule } = useContext(PetsContext);
+  const { patients, startProcedure, completeProcedure, updatePatientSchedule } = useContext(PatientsContext);
   const [viewMode, setViewMode] = useState('day');
   const [selectedDate, setSelectedDate] = useState(new Date());
-  const [selectedPet, setSelectedPet] = useState(null);
+  const [selectedPatient, setSelectedPatient] = useState(null);
   const [openDialog, setOpenDialog] = useState(false);
   const [openEditDialog, setOpenEditDialog] = useState(false);
   const [editDate, setEditDate] = useState(new Date());
@@ -42,26 +42,38 @@ const Calendar = () => {
     'default': '#ff0055ff'
   };
 
-  // Cores para tipos de serviço
-  const serviceColors = {
-    'Banho Completo': '#FF2D75',
-    'Banho e Tosa': '#00F0FF',
-    'Tosa Higiênica': '#e73434ff',
-    'Tosa Completa': '#ffd700ff',
-    'Plano Mensal': '#4671ffff',
-    'Banho': '#8e24aa',
+  // Cores para tipos de procedimento
+  const procedureColors = {
+    'Consulta Odontológica': '#1976d2',
+    'Limpeza Dental': '#2e7d32',
+    'Clareamento': '#ff9800',
+    'Extração': '#d32f2f',
+    'Canal': '#7b1fa2',
+    'Microcirurgia': '#c2185b',
+    'Aplicação de Botox': '#00796b',
+    'Preenchimento': '#9c27b0',
+    'Lipoaspiração': '#f06292',
+    'Rinoplastia': '#5e35b1',
+    'Blefaroplastia': '#f57c00',
     'Outros': '#8fe99bff'
   };
 
-  const serviceTypes = [
-    'Banho Completo',
-    'Banho e Tosa',
-    'Tosa Higiênica',
-    'Tosa Completa',
-    'Plano Mensal',
-    'Banho',
+  const procedureTypes = [
+    'Consulta Odontológica',
+    'Limpeza Dental',
+    'Clareamento',
+    'Extração',
+    'Canal',
+    'Microcirurgia',
+    'Aplicação de Botox',
+    'Preenchimento',
+    'Lipoaspiração',
+    'Rinoplastia',
+    'Blefaroplastia',
     'Outros'
   ];
+
+  const dentists = ['Dra. Ana Silva', 'Dr. Carlos Santos', 'Dra. Mariana Oliveira'];
 
   const normalizeDate = (date) => {
     if (!date) return null;
@@ -79,23 +91,23 @@ const Calendar = () => {
     }
   };
 
-  const filteredPets = useMemo(() => {
-    return pets.filter(pet => {
-      const petDate = normalizeDate(pet.scheduleDate);
-      if (!petDate) return false;
+  const filteredPatients = useMemo(() => {
+    return patients.filter(patient => {
+      const patientDate = normalizeDate(patient.scheduleDate);
+      if (!patientDate) return false;
 
       switch (viewMode) {
-        case 'day': return isSameDay(petDate, selectedDate);
-        case 'week': return isSameWeek(petDate, selectedDate, { weekStartsOn: 1 });
-        case 'month': return isSameMonth(petDate, selectedDate);
+        case 'day': return isSameDay(patientDate, selectedDate);
+        case 'week': return isSameWeek(patientDate, selectedDate, { weekStartsOn: 1 });
+        case 'month': return isSameMonth(patientDate, selectedDate);
         default: return true;
       }
     });
-  }, [pets, viewMode, selectedDate]);
+  }, [patients, viewMode, selectedDate]);
 
-  const getPetStatus = (pet) => {
-    if (pet.completedToday) return 'completed';
-    if (pet.inService) return 'inProgress';
+  const getPatientStatus = (patient) => {
+    if (patient.completedToday) return 'completed';
+    if (patient.inProcedure) return 'inProgress';
     return 'pending';
   };
 
@@ -125,8 +137,8 @@ const Calendar = () => {
     setSelectedDate(newDate);
   };
 
-  const renderPetCard = (pet, index) => {
-    const status = getPetStatus(pet);
+  const renderPatientCard = (patient, index) => {
+    const status = getPatientStatus(patient);
     const statusText = {
       'pending': 'Agendado',
       'inProgress': 'Em andamento',
@@ -134,13 +146,13 @@ const Calendar = () => {
     }[status];
 
     return (
-      <Draggable key={pet.id.toString()} draggableId={pet.id.toString()} index={index}>
+      <Draggable key={patient.id.toString()} draggableId={patient.id.toString()} index={index}>
         {(provided) => (
           <Paper
             ref={provided.innerRef}
             {...provided.draggableProps}
             {...provided.dragHandleProps}
-            onClick={() => handlePetClick(pet)}
+            onClick={() => handlePatientClick(patient)}
             sx={{
               p: 2,
               mb: 2,
@@ -156,7 +168,7 @@ const Calendar = () => {
           >
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <Typography variant="subtitle1" fontWeight="bold">
-                {pet.name}
+                {patient.name}
               </Typography>
               <Chip
                 label={statusText}
@@ -171,18 +183,23 @@ const Calendar = () => {
             </Box>
 
             <Typography variant="body2" color="text.secondary">
-              {pet.owner}
+              {patient.phone}
             </Typography>
 
-            <Box sx={{ display: 'flex', alignItems: 'center', mt: 1, gap: 1 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', mt: 1, gap: 1, flexWrap: 'wrap' }}>
               <Chip
-                label={pet.serviceType || 'Serviço'}
+                label={patient.procedureType || 'Procedimento'}
                 size="small"
                 sx={{
-                  backgroundColor: serviceColors[pet.serviceType] || serviceColors['Outros'],
+                  backgroundColor: procedureColors[patient.procedureType] || procedureColors['Outros'],
                   color: 'white',
                   fontWeight: 'bold'
                 }}
+              />
+              <Chip
+                label={patient.dentist || 'Dentista não definido'}
+                size="small"
+                variant="outlined"
               />
               {status === 'completed' && (
                 <CheckCircleIcon sx={{ color: statusColors.completed }} />
@@ -192,9 +209,9 @@ const Calendar = () => {
               )}
             </Box>
 
-            {pet.observations && (
+            {patient.observations && (
               <Typography variant="body2" sx={{ mt: 1, fontStyle: 'italic' }}>
-                {pet.observations}
+                {patient.observations}
               </Typography>
             )}
           </Paper>
@@ -204,7 +221,7 @@ const Calendar = () => {
   };
 
   const renderDayView = () => {
-    const dayPets = [...filteredPets].sort((a, b) => {
+    const dayPatients = [...filteredPatients].sort((a, b) => {
       const dateA = normalizeDate(a.scheduleDate);
       const dateB = normalizeDate(b.scheduleDate);
       return dateA - dateB;
@@ -219,11 +236,11 @@ const Calendar = () => {
         <Droppable droppableId="day-view">
           {(provided) => (
             <div {...provided.droppableProps} ref={provided.innerRef}>
-              {dayPets.length > 0 ? (
-                dayPets.map((pet, index) => renderPetCard(pet, index))
+              {dayPatients.length > 0 ? (
+                dayPatients.map((patient, index) => renderPatientCard(patient, index))
               ) : (
                 <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
-                  Nenhum serviço agendado para este dia.
+                  Nenhum procedimento agendado para este dia.
                 </Typography>
               )}
               {provided.placeholder}
@@ -251,9 +268,9 @@ const Calendar = () => {
 
         <Grid container spacing={2}>
           {weekDays.map(day => {
-            const dayPets = pets.filter(pet => {
-              const petDate = normalizeDate(pet.scheduleDate);
-              return petDate && isSameDay(petDate, day);
+            const dayPatients = patients.filter(patient => {
+              const patientDate = normalizeDate(patient.scheduleDate);
+              return patientDate && isSameDay(patientDate, day);
             }).sort((a, b) => {
               const dateA = normalizeDate(a.scheduleDate);
               const dateB = normalizeDate(b.scheduleDate);
@@ -261,7 +278,7 @@ const Calendar = () => {
             });
 
             return (
-              <Grid key={day.toString()} xs={12} sm={6} md={4}>
+              <Grid item key={day.toString()} xs={12} sm={6} md={4}>
                 <Paper sx={{
                   p: 2,
                   borderLeft: `4px solid ${isToday(day) ? statusColors.inProgress : isWeekend(day) ? theme.palette.secondary.light : theme.palette.grey[300]}`,
@@ -282,11 +299,11 @@ const Calendar = () => {
                   <Droppable droppableId={`week-day-${format(day, 'yyyy-MM-dd')}`}>
                     {(provided) => (
                       <div {...provided.droppableProps} ref={provided.innerRef}>
-                        {dayPets.length > 0 ? (
-                          dayPets.map((pet, index) => renderPetCard(pet, index))
+                        {dayPatients.length > 0 ? (
+                          dayPatients.map((patient, index) => renderPatientCard(patient, index))
                         ) : (
                           <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
-                            Nenhum serviço agendado
+                            Nenhum procedimento agendado
                           </Typography>
                         )}
                         {provided.placeholder}
@@ -310,13 +327,14 @@ const Calendar = () => {
     const weeks = [];
     let currentDate = startOfWeek(firstDayOfMonth, { weekStartsOn: 0 });
 
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < 6; i++) {
       const week = eachDayOfInterval({
         start: currentDate,
         end: endOfWeek(currentDate, { weekStartsOn: 0 })
       });
       weeks.push(week);
       currentDate = addDays(currentDate, 7);
+      if (currentDate > lastDayOfMonth) break;
     }
 
     return (
@@ -328,7 +346,7 @@ const Calendar = () => {
       }}>
         <Grid container spacing={1} sx={{ mb: 1 }}>
           {weekDaysHeader.map((day, index) => (
-            <Grid key={index} xs={1} sx={{ textAlign: 'center', padding: '8px 0', margin: 'auto' }}>
+            <Grid item key={index} xs={1} sx={{ textAlign: 'center', padding: '8px 0', margin: 'auto' }}>
               <Typography variant="subtitle1" fontWeight="bold" sx={{ fontSize: '1.1rem' }}>
                 {day}
               </Typography>
@@ -341,9 +359,9 @@ const Calendar = () => {
             {week.map((day, dayIndex) => {
               const isCurrentMonth = isSameMonth(day, selectedDate);
               const dayNumber = format(day, 'd');
-              const dayPets = pets.filter(pet => {
-                const petDate = normalizeDate(pet.scheduleDate);
-                return petDate && isSameDay(petDate, day);
+              const dayPatients = patients.filter(patient => {
+                const patientDate = normalizeDate(patient.scheduleDate);
+                return patientDate && isSameDay(patientDate, day);
               }).sort((a, b) => {
                 const dateA = normalizeDate(a.scheduleDate);
                 const dateB = normalizeDate(b.scheduleDate);
@@ -351,7 +369,7 @@ const Calendar = () => {
               });
 
               return (
-                <Grid key={day.toString()} xs={1} sx={{
+                <Grid item key={day.toString()} xs={1} sx={{
                   height: '150px',
                   minWidth: 'calc(92%/7)',
                   position: 'relative',
@@ -402,10 +420,10 @@ const Calendar = () => {
                             borderRadius: '4px',
                           }
                         }}>
-                          {dayPets.map((pet, index) => (
+                          {dayPatients.map((patient, index) => (
                             <Draggable
-                              key={pet.id.toString()}
-                              draggableId={pet.id.toString()}
+                              key={patient.id.toString()}
+                              draggableId={patient.id.toString()}
                               index={index}
                             >
                               {(provided) => (
@@ -413,11 +431,11 @@ const Calendar = () => {
                                   ref={provided.innerRef}
                                   {...provided.draggableProps}
                                   {...provided.dragHandleProps}
-                                  onClick={() => handlePetClick(pet)}
+                                  onClick={() => handlePatientClick(patient)}
                                   sx={{
                                     mt: 0.5,
                                     p: 1,
-                                    backgroundColor: statusColors[getPetStatus(pet)],
+                                    backgroundColor: statusColors[getPatientStatus(patient)],
                                     color: 'white',
                                     borderRadius: 1,
                                     cursor: 'pointer',
@@ -434,14 +452,14 @@ const Calendar = () => {
                                     overflow: 'hidden',
                                     textOverflow: 'ellipsis'
                                   }}>
-                                    {pet.name} ({format(normalizeDate(pet.scheduleDate), 'HH:mm')})
+                                    {patient.name} ({format(normalizeDate(patient.scheduleDate), 'HH:mm')})
                                   </Typography>
                                   <Typography variant="caption" sx={{
                                     fontSize: '0.65rem',
                                     display: 'block',
                                     opacity: 0.8
                                   }}>
-                                    {pet.serviceType}
+                                    {patient.procedureType}
                                   </Typography>
                                 </Box>
                               )}
@@ -464,13 +482,13 @@ const Calendar = () => {
   const handleDragEnd = (result) => {
     if (!result.destination) return;
 
-    const petId = result.draggableId;
-    const pet = pets.find(p => p.id.toString() === petId);
+    const patientId = result.draggableId;
+    const patient = patients.find(p => p.id.toString() === patientId);
 
-    if (!pet) return;
+    if (!patient) return;
 
     let newDate;
-    const originalDate = normalizeDate(pet.scheduleDate);
+    const originalDate = normalizeDate(patient.scheduleDate);
 
     if (result.destination.droppableId.startsWith('month-day-')) {
       const dateStr = result.destination.droppableId.replace('month-day-', '');
@@ -486,31 +504,31 @@ const Calendar = () => {
     updatedDate.setHours(originalDate.getHours());
     updatedDate.setMinutes(originalDate.getMinutes());
 
-    updatePetSchedule(pet.id, updatedDate);
+    updatePatientSchedule(patient.id, updatedDate);
     setSelectedDate(new Date(updatedDate));
   };
 
-  const handlePetClick = (pet) => {
-    setSelectedPet(pet);
+  const handlePatientClick = (patient) => {
+    setSelectedPatient(patient);
     setOpenDialog(true);
   };
 
-  const handleEditClick = (pet) => {
-    const petDate = normalizeDate(pet.scheduleDate);
-    setEditDate(petDate);
-    setEditTime(petDate);
-    setSelectedPet(pet);
+  const handleEditClick = (patient) => {
+    const patientDate = normalizeDate(patient.scheduleDate);
+    setEditDate(patientDate);
+    setEditTime(patientDate);
+    setSelectedPatient(patient);
     setOpenEditDialog(true);
   };
 
   const handleSaveEdit = () => {
-    if (!selectedPet) return;
+    if (!selectedPatient) return;
 
     const newDate = new Date(editDate);
     newDate.setHours(editTime.getHours());
     newDate.setMinutes(editTime.getMinutes());
 
-    updatePetSchedule(selectedPet.id, newDate);
+    updatePatientSchedule(selectedPatient.id, newDate);
     setOpenEditDialog(false);
     setOpenDialog(false);
 
@@ -519,19 +537,19 @@ const Calendar = () => {
     }
   };
 
-  const handleStartService = () => {
-    if (selectedPet) {
-      startService(selectedPet.id);
+  const handleStartProcedure = () => {
+    if (selectedPatient) {
+      startProcedure(selectedPatient.id);
       setOpenDialog(false);
     }
   };
 
-  const handleCompleteService = () => {
-  if (selectedPet) {
-    completeService(selectedPet.id);
-    setOpenDialog(false);
-  }
-};
+  const handleCompleteProcedure = () => {
+    if (selectedPatient) {
+      completeProcedure(selectedPatient.id);
+      setOpenDialog(false);
+    }
+  };
 
   return (
     <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={ptBR}>
@@ -546,7 +564,7 @@ const Calendar = () => {
             gap: 2
           }}>
             <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
-              Agenda de Serviços
+              Agenda de Procedimentos
             </Typography>
 
             <Tabs
@@ -609,10 +627,10 @@ const Calendar = () => {
             </Typography>
           </Box>
 
-          {filteredPets.length === 0 && viewMode === 'day' ? (
+          {filteredPatients.length === 0 && viewMode === 'day' ? (
             <Paper sx={{ p: 3, textAlign: 'center' }}>
               <Typography variant="body1">
-                Nenhum serviço agendado para este período.
+                Nenhum procedimento agendado para este período.
               </Typography>
             </Paper>
           ) : (
@@ -625,49 +643,54 @@ const Calendar = () => {
 
           <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="sm" fullWidth>
             <DialogTitle sx={{ backgroundColor: theme.palette.primary.main, color: 'white' }}>
-              Detalhes do Serviço
+              Detalhes do Procedimento
             </DialogTitle>
             <DialogContent>
-              {selectedPet && (
+              {selectedPatient && (
                 <Box sx={{ mt: 2 }}>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
                     <Avatar sx={{
-                      bgcolor: serviceColors[selectedPet.serviceType] || serviceColors['Outros'],
+                      bgcolor: procedureColors[selectedPatient.procedureType] || procedureColors['Outros'],
                       width: 56,
                       height: 56,
                       fontSize: 24,
                       fontWeight: 'bold'
                     }}>
-                      {selectedPet.name.charAt(0)}
+                      {selectedPatient.name.charAt(0)}
                     </Avatar>
                     <Box>
-                      <Typography variant="h5" fontWeight="bold">{selectedPet.name}</Typography>
-                      <Typography variant="body1" color="text.secondary">{selectedPet.owner}</Typography>
+                      <Typography variant="h5" fontWeight="bold">{selectedPatient.name}</Typography>
+                      <Typography variant="body1" color="text.secondary">{selectedPatient.phone}</Typography>
                     </Box>
                   </Box>
 
                   <Grid container spacing={2} sx={{ mb: 2 }}>
-                    <Grid xs={6}>
+                    <Grid item xs={6}>
                       <Typography variant="body1">
-                        <strong>Serviço:</strong> {selectedPet.serviceType}
+                        <strong>Procedimento:</strong> {selectedPatient.procedureType}
                       </Typography>
                     </Grid>
-                    <Grid xs={6}>
+                    <Grid item xs={6}>
                       <Typography variant="body1">
-                        <strong>Horário:</strong> {format(normalizeDate(selectedPet.scheduleDate), 'HH:mm')}
+                        <strong>Dentista:</strong> {selectedPatient.dentist}
                       </Typography>
                     </Grid>
-                    <Grid xs={6}>
+                    <Grid item xs={6}>
                       <Typography variant="body1">
-                        <strong>Data:</strong> {format(normalizeDate(selectedPet.scheduleDate), 'dd/MM/yyyy')}
+                        <strong>Horário:</strong> {format(normalizeDate(selectedPatient.scheduleDate), 'HH:mm')}
                       </Typography>
                     </Grid>
-                    <Grid xs={12}>
-                      {selectedPet.observations && (
+                    <Grid item xs={6}>
+                      <Typography variant="body1">
+                        <strong>Data:</strong> {format(normalizeDate(selectedPatient.scheduleDate), 'dd/MM/yyyy')}
+                      </Typography>
+                    </Grid>
+                    <Grid item xs={12}>
+                      {selectedPatient.observations && (
                         <Box sx={{ mt: 1 }}>
                           <Typography variant="body1" fontWeight="bold">Observações:</Typography>
                           <Paper sx={{ p: 2, backgroundColor: '#f5f5f5' }}>
-                            <Typography>{selectedPet.observations}</Typography>
+                            <Typography>{selectedPatient.observations}</Typography>
                           </Paper>
                         </Box>
                       )}
@@ -687,11 +710,11 @@ const Calendar = () => {
                         'pending': 'AGENDADO',
                         'inProgress': 'EM ANDAMENTO',
                         'completed': 'FINALIZADO'
-                      }[getPetStatus(selectedPet)]}
+                      }[getPatientStatus(selectedPatient)]}
                     </Typography>
-                    {selectedPet.completedToday ? (
+                    {selectedPatient.completedToday ? (
                       <CheckCircleIcon sx={{ color: statusColors.completed, fontSize: 32 }} />
-                    ) : selectedPet.inService ? (
+                    ) : selectedPatient.inProcedure ? (
                       <PlayCircleOutlineIcon sx={{ color: statusColors.inProgress, fontSize: 32 }} />
                     ) : null}
                   </Paper>
@@ -701,33 +724,33 @@ const Calendar = () => {
             <DialogActions>
               <Button onClick={() => setOpenDialog(false)}>Fechar</Button>
               <Button
-                onClick={() => handleEditClick(selectedPet)}
+                onClick={() => handleEditClick(selectedPatient)}
                 variant="outlined"
                 startIcon={<EditIcon />}
                 sx={{ mr: 1 }}
               >
                 Editar
               </Button>
-              {!selectedPet?.inService && !selectedPet?.completedToday && (
+              {!selectedPatient?.inProcedure && !selectedPatient?.completedToday && (
                 <Button
-                  onClick={handleStartService}
+                  onClick={handleStartProcedure}
                   variant="contained"
                   color="primary"
                   startIcon={<PlayCircleOutlineIcon />}
                   sx={{ minWidth: 180 }}
                 >
-                  Iniciar Serviço
+                  Iniciar Procedimento
                 </Button>
               )}
-              {selectedPet?.inService && !selectedPet?.completedToday && (
+              {selectedPatient?.inProcedure && !selectedPatient?.completedToday && (
                 <Button
-                  onClick={handleCompleteService}
+                  onClick={handleCompleteProcedure}
                   variant="contained"
                   color="success"
                   startIcon={<CheckCircleIcon />}
                   sx={{ minWidth: 180 }}
                 >
-                  Finalizar Serviço
+                  Finalizar Procedimento
                 </Button>
               )}
             </DialogActions>
@@ -738,35 +761,35 @@ const Calendar = () => {
               Editar Agendamento
             </DialogTitle>
             <DialogContent>
-              {selectedPet && (
+              {selectedPatient && (
                 <Box sx={{ mt: 2 }}>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
                     <Avatar sx={{
-                      bgcolor: serviceColors[selectedPet.serviceType] || serviceColors['Outros'],
+                      bgcolor: procedureColors[selectedPatient.procedureType] || procedureColors['Outros'],
                       width: 56,
                       height: 56,
                       fontSize: 24,
                       fontWeight: 'bold'
                     }}>
-                      {selectedPet.name.charAt(0)}
+                      {selectedPatient.name.charAt(0)}
                     </Avatar>
                     <Box>
-                      <Typography variant="h5" fontWeight="bold">{selectedPet.name}</Typography>
-                      <Typography variant="body1" color="text.secondary">{selectedPet.owner}</Typography>
+                      <Typography variant="h5" fontWeight="bold">{selectedPatient.name}</Typography>
+                      <Typography variant="body1" color="text.secondary">{selectedPatient.phone}</Typography>
                     </Box>
                   </Box>
 
                   <Grid container spacing={2} sx={{ mb: 2 }}>
-                    <Grid xs={12} sm={6}>
+                    <Grid item xs={12} sm={6}>
                       <DatePicker
-                        label="Data do Serviço"
+                        label="Data do Procedimento"
                         value={editDate}
                         onChange={(newValue) => setEditDate(newValue)}
                         format="dd/MM/yyyy"
                         sx={{ width: '100%' }}
                       />
                     </Grid>
-                    <Grid xs={12} sm={6}>
+                    <Grid item xs={12} sm={6}>
                       <TimePicker
                         label="Horário"
                         value={editTime}
@@ -774,28 +797,43 @@ const Calendar = () => {
                         sx={{ width: '100%' }}
                       />
                     </Grid>
-                    <Grid xs={12}>
+                    <Grid item xs={12}>
                       <TextField
                         select
-                        label="Tipo de Serviço"
-                        value={selectedPet.serviceType}
-                        onChange={(e) => setSelectedPet({ ...selectedPet, serviceType: e.target.value })}
+                        label="Tipo de Procedimento"
+                        value={selectedPatient.procedureType}
+                        onChange={(e) => setSelectedPatient({ ...selectedPatient, procedureType: e.target.value })}
                         fullWidth
                       >
-                        {serviceTypes.map((service) => (
-                          <MenuItem key={service} value={service}>
-                            {service}
+                        {procedureTypes.map((procedure) => (
+                          <MenuItem key={procedure} value={procedure}>
+                            {procedure}
                           </MenuItem>
                         ))}
                       </TextField>
                     </Grid>
-                    <Grid xs={12}>
+                    <Grid item xs={12}>
+                      <TextField
+                        select
+                        label="Dentista Responsável"
+                        value={selectedPatient.dentist}
+                        onChange={(e) => setSelectedPatient({ ...selectedPatient, dentist: e.target.value })}
+                        fullWidth
+                      >
+                        {dentists.map((dentist) => (
+                          <MenuItem key={dentist} value={dentist}>
+                            {dentist}
+                          </MenuItem>
+                        ))}
+                      </TextField>
+                    </Grid>
+                    <Grid item xs={12}>
                       <TextField
                         label="Observações"
                         multiline
                         rows={3}
-                        value={selectedPet.observations || ''}
-                        onChange={(e) => setSelectedPet({ ...selectedPet, observations: e.target.value })}
+                        value={selectedPatient.observations || ''}
+                        onChange={(e) => setSelectedPatient({ ...selectedPatient, observations: e.target.value })}
                         fullWidth
                       />
                     </Grid>

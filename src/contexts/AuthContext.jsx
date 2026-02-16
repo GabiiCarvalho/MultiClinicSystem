@@ -1,4 +1,3 @@
-// src/contexts/AuthContext.jsx
 import { createContext, useContext, useState, useEffect } from 'react';
 import api from '../services/api';
 
@@ -6,20 +5,15 @@ export const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
-  const [petshopName, setPetshopName] = useState('');
+  const [clinicName, setClinicName] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
     const userData = localStorage.getItem('user');
 
-    console.log('🔍 AuthContext - Token:', token);
-    console.log('🔍 AuthContext - UserData:', userData);
-
-
     if (token && userData) {
       try {
-        // Verifica se userData é um JSON válido antes de fazer parse
         const parsedUser = JSON.parse(userData);
         if (parsedUser && typeof parsedUser === 'object') {
           setUser(parsedUser);
@@ -27,14 +21,12 @@ export const AuthProvider = ({ children }) => {
         }
       } catch (error) {
         console.error('Erro ao parsear user data:', error);
-        // Limpa dados inválidos
         localStorage.removeItem('token');
         localStorage.removeItem('user');
       }
     }
   }, []);
 
-  // Função de login
   const login = async (email, senha) => {
     setIsLoading(true);
     try {
@@ -43,19 +35,14 @@ export const AuthProvider = ({ children }) => {
         senha: senha
       });
 
-      console.log('Resposta completa:', response);
-      console.log('Dados da resposta:', response.data);
-
       const { token, usuario, loja_nome } = response.data;
 
-      // Salvar dados - CORRIGIDO (verifica se usuario existe)
       if (usuario && token) {
         localStorage.setItem('token', token);
         localStorage.setItem('user', JSON.stringify(usuario));
         setUser(usuario);
-        setPetshopName(loja_nome || '');
+        setClinicName(loja_nome || '');
 
-        // Configurar token nas requisições
         api.defaults.headers.Authorization = `Bearer ${token}`;
 
         return true;
@@ -70,11 +57,10 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Função de cadastro
   const register = async (formData) => {
     setIsLoading(true);
     try {
-      const response = await api.post('/auth/cadastrar-proprietario', {
+      const response = await api.post('/auth/cadastrar-gestor', {
         name: formData.name,
         email: formData.email,
         password: formData.password,
@@ -82,7 +68,7 @@ export const AuthProvider = ({ children }) => {
         phone: formData.phone,
         cnpj: formData.cnpj,
         address: formData.address,
-        petshopName: formData.petshopName
+        clinicName: formData.clinicName
       });
 
       return response.data;
@@ -94,24 +80,46 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Função de logout
   const logout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
-    localStorage.removeItem('petshopName');
+    localStorage.removeItem('clinicName');
     setUser(null);
-    setPetshopName('');
+    setClinicName('');
     delete api.defaults.headers.Authorization;
+  };
+
+  const updateClinicName = (newName) => {
+    setClinicName(newName);
+    localStorage.setItem('clinicName', newName);
+  };
+
+  // Verificar permissões
+  const hasPermission = (permission) => {
+    if (!user) return false;
+    
+    const permissions = {
+      'atendente': ['view_schedule', 'create_appointment', 'cancel_appointment', 'contact_patient', 'create_budget'],
+      'dentista': ['view_my_schedule', 'update_procedure_status', 'view_patient_info', 'add_observations'],
+      'financeiro': ['view_cashier', 'process_payment', 'view_financial_reports', 'issue_receipt'],
+      'gestor': ['view_all_schedules', 'manage_users', 'manage_materials', 'view_patient_flow', 'view_financial_reports', 'manage_prices', 'view_canceled_appointments']
+    };
+
+    if (user.cargo === 'gestor') return true; // Gestor tem todas as permissões
+    
+    return permissions[user.cargo]?.includes(permission) || false;
   };
 
   return (
     <AuthContext.Provider value={{
       user,
-      petshopName,
+      clinicName,
       isLoading,
       login,
       register,
-      logout
+      logout,
+      updateClinicName,
+      hasPermission
     }}>
       {children}
     </AuthContext.Provider>

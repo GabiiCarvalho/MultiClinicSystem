@@ -14,21 +14,23 @@ import {
   Alert
 } from "@mui/material";
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
-import WarningIcon from '@mui/icons-material/Warning';
 import { useState } from "react";
 
-const ServiceFlow = ({ pet, onNextStep, onComplete }) => {
-  const [activeStep, setActiveStep] = useState(pet.serviceProgress || 0);
+const ProcedureFlow = ({ patient, onNextStep, onComplete }) => {
+  const [activeStep, setActiveStep] = useState(patient.procedureProgress || 0);
   const [openDialog, setOpenDialog] = useState(false);
 
   const getSteps = () => {
-    return ['Banho', 'Secagem', 'Finalização'];
+    if (patient.procedureType.includes('Cirurgia') || patient.procedureType.includes('Microcirurgia')) {
+      return ['Preparação', 'Anestesia', 'Procedimento', 'Recuperação'];
+    }
+    if (patient.procedureType.includes('Consulta')) {
+      return ['Anamnese', 'Exame', 'Diagnóstico', 'Finalização'];
+    }
+    return ['Preparação', 'Procedimento', 'Finalização'];
   };
 
   const steps = getSteps();
-  const isMonthlyPlan = pet.serviceType === "Plano Mensal";
-  const bathsRemaining = pet.monthlyBathsRemaining ?? 4;
-  const needsRenewal = isMonthlyPlan && bathsRemaining <= 0;
 
   const handleNext = () => {
     const newStep = activeStep + 1;
@@ -37,48 +39,31 @@ const ServiceFlow = ({ pet, onNextStep, onComplete }) => {
     if (newStep === steps.length - 1) {
       setOpenDialog(true);
     } else {
-      onNextStep?.(pet.id, newStep);
+      onNextStep?.(patient.id, newStep);
     }
   };
 
   const handleComplete = () => {
-    const isMonthlyPlan = pet.serviceType === "Plano Mensal";
-    const updatedPet = {
-      ...pet,
+    const updatedPatient = {
+      ...patient,
       completedToday: true,
-      inService: false,
-      serviceProgress: steps.length,
-      monthlyBathsRemaining: isMonthlyPlan ? Math.max(0, (pet.monthlyBathsRemaining || 0) - 1) : 0
+      inProcedure: false,
+      procedureProgress: steps.length
     };
 
-    onComplete?.(updatedPet);
+    onComplete?.(updatedPatient);
     setOpenDialog(false);
   };
 
   return (
     <Paper sx={{ p: 3, mb: 3 }}>
       <Typography variant="h5" gutterBottom sx={{ fontWeight: 'bold' }}>
-        Processo para: {pet.name} (Dono: {pet.owner})
+        Procedimento para: {patient.name}
       </Typography>
 
       <Typography variant="h6" gutterBottom sx={{ mt: 2 }}>
-        Serviço: {pet.serviceType}
+        {patient.procedureType} - {patient.dentist}
       </Typography>
-
-      {isMonthlyPlan && (
-        <Box sx={{ mb: 3 }}>
-          <Chip
-            label={`${bathsRemaining} banhos restantes`}
-            color="primary"
-            variant="outlined"
-            sx={{
-              fontWeight: 'bold',
-              fontSize: '1rem',
-              padding: '8px 12px'
-            }}
-          />
-        </Box>
-      )}
 
       <Stepper activeStep={activeStep} alternativeLabel sx={{ mb: 4 }}>
         {steps.map((label) => (
@@ -88,7 +73,7 @@ const ServiceFlow = ({ pet, onNextStep, onComplete }) => {
         ))}
       </Stepper>
 
-      {pet.observations && (
+      {patient.observations && (
         <Box sx={{
           mb: 3,
           p: 2,
@@ -100,7 +85,7 @@ const ServiceFlow = ({ pet, onNextStep, onComplete }) => {
             Observações:
           </Typography>
           <Typography variant="body1" sx={{ whiteSpace: 'pre-line' }}>
-            {pet.observations}
+            {patient.observations}
           </Typography>
         </Box>
       )}
@@ -110,10 +95,10 @@ const ServiceFlow = ({ pet, onNextStep, onComplete }) => {
           variant="contained"
           size="large"
           onClick={handleNext}
-          disabled={activeStep >= steps.length || (isMonthlyPlan && needsRenewal)}
+          disabled={activeStep >= steps.length}
           sx={{ px: 6, py: 1.5 }}
         >
-          {activeStep >= steps.length - 1 ? 'Finalização' : 'Próximo Passo'}
+          {activeStep >= steps.length - 1 ? 'Finalizar' : 'Próximo Passo'}
         </Button>
       </Box>
 
@@ -123,14 +108,8 @@ const ServiceFlow = ({ pet, onNextStep, onComplete }) => {
         </DialogTitle>
         <DialogContent>
           <Typography variant="body1" gutterBottom sx={{ fontSize: '1.1rem' }}>
-            Confirmar que o serviço para {pet.name} foi concluído com sucesso?
+            Confirmar que o procedimento para {patient.name} foi concluído com sucesso?
           </Typography>
-
-          {isMonthlyPlan && (
-            <Alert severity="info" sx={{ mt: 2, fontSize: '1rem' }}>
-              Após esta sessão, restarão {Math.max(0, bathsRemaining - 1)} banhos no plano.
-            </Alert>
-          )}
         </DialogContent>
         <DialogActions sx={{ padding: 3 }}>
           <Button
@@ -154,4 +133,4 @@ const ServiceFlow = ({ pet, onNextStep, onComplete }) => {
   );
 };
 
-export default ServiceFlow;
+export default ProcedureFlow;

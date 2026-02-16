@@ -1,102 +1,110 @@
 import { useState, useContext } from "react";
-import { PetsContext } from "../contexts/PetsContext";
-import ServiceFlow from "../components/ServiceFlow";
+import { PatientsContext } from "../contexts/PatientsContext";
+import ProcedureFlow from "../components/ProcedureFlow";
 import { Button, TextField, Box, Typography, MenuItem, Select, FormControl, InputLabel } from "@mui/material";
 
 const Services = () => {
-  const { pets, setPets } = useContext(PetsContext);
-  const [newPet, setNewPet] = useState({ 
+  const { patients, setPatients } = useContext(PatientsContext);
+  const [newPatient, setNewPatient] = useState({ 
     name: "", 
-    owner: "",
-    serviceType: "Banho",
-    monthlyBathsRemaining: 0
+    procedureType: "Consulta Odontológica",
+    dentist: "Dra. Ana Silva"
   });
 
-  const handleAddPet = () => {
-    if (newPet.name && newPet.owner) {
-      setPets([...pets, { 
-        ...newPet, 
+  const handleAddPatient = () => {
+    if (newPatient.name) {
+      setPatients([...patients, { 
+        ...newPatient, 
         id: Date.now(),
-        serviceProgress: 0,
-        inService: false,
+        procedureProgress: 0,
+        inProcedure: false,
         completedToday: false,
-        monthlyBathsRemaining: newPet.serviceType === "Plano Mensal" ? 4 : 0
+        phone: "",
+        scheduleDate: new Date()
       }]);
-      setNewPet({ 
+      setNewPatient({ 
         name: "", 
-        owner: "",
-        serviceType: "Banho",
-        monthlyBathsRemaining: 0
+        procedureType: "Consulta Odontológica",
+        dentist: "Dra. Ana Silva"
       });
     }
   };
 
-  const handleNextStep = (petId, step) => {
-    setPets(pets.map(pet => 
-      pet.id === petId ? { ...pet, serviceProgress: step } : pet
+  const handleNextStep = (patientId, step) => {
+    setPatients(patients.map(patient => 
+      patient.id === patientId ? { ...patient, procedureProgress: step } : patient
     ));
   };
 
-  const handleCompleteService = (petId) => {
-    setPets(pets.map(pet => 
-      pet.id === petId ? { 
-        ...pet, 
-        completedToday: true,
-        monthlyBathsRemaining: pet.serviceType === "Plano Mensal" 
-          ? Math.max(0, pet.monthlyBathsRemaining - 1)
-          : 0
-      } : pet
+  const handleCompleteProcedure = (patientId) => {
+    setPatients(patients.map(patient => 
+      patient.id === patientId ? { 
+        ...patient, 
+        completedToday: true
+      } : patient
     ));
   };
+
+  const dentists = ['Dra. Ana Silva', 'Dr. Carlos Santos', 'Dra. Mariana Oliveira'];
 
   return (
     <Box sx={{ padding: 3 }}>
       <Typography variant="h4" gutterBottom>
-        Serviços do Petshop
+        Procedimentos da Clínica
       </Typography>
 
-      {/* Formulário para adicionar novo pet */}
-      <Box sx={{ display: "flex", gap: 2, marginBottom: 4, alignItems: 'center' }}>
+      {/* Formulário para adicionar novo paciente */}
+      <Box sx={{ display: "flex", gap: 2, marginBottom: 4, alignItems: 'center', flexWrap: 'wrap' }}>
         <TextField
-          label="Nome do Pet"
-          value={newPet.name}
-          onChange={(e) => setNewPet({ ...newPet, name: e.target.value })}
+          label="Nome do Paciente"
+          value={newPatient.name}
+          onChange={(e) => setNewPatient({ ...newPatient, name: e.target.value })}
         />
-        <TextField
-          label="Dono"
-          value={newPet.owner}
-          onChange={(e) => setNewPet({ ...newPet, owner: e.target.value })}
-        />
-        <FormControl sx={{ minWidth: 180 }}>
-          <InputLabel>Tipo de Serviço</InputLabel>
+        <FormControl sx={{ minWidth: 200 }}>
+          <InputLabel>Tipo de Procedimento</InputLabel>
           <Select
-            value={newPet.serviceType}
-            label="Tipo de Serviço"
-            onChange={(e) => setNewPet({ ...newPet, serviceType: e.target.value })}
+            value={newPatient.procedureType}
+            label="Tipo de Procedimento"
+            onChange={(e) => setNewPatient({ ...newPatient, procedureType: e.target.value })}
           >
-            <MenuItem value="Banho">Banho</MenuItem>
-            <MenuItem value="Banho e Tosa">Banho e Tosa</MenuItem>
-            <MenuItem value="Tosa Higiênica">Tosa Higiênica</MenuItem>
-            <MenuItem value="Tosa Completa">Tosa Completa</MenuItem>
-            <MenuItem value="Plano Mensal">Plano Mensal</MenuItem>
+            <MenuItem value="Consulta Odontológica">Consulta Odontológica</MenuItem>
+            <MenuItem value="Limpeza Dental">Limpeza Dental</MenuItem>
+            <MenuItem value="Clareamento">Clareamento</MenuItem>
+            <MenuItem value="Extração">Extração</MenuItem>
+            <MenuItem value="Canal">Canal</MenuItem>
+            <MenuItem value="Microcirurgia">Microcirurgia</MenuItem>
+            <MenuItem value="Aplicação de Botox">Aplicação de Botox</MenuItem>
+            <MenuItem value="Preenchimento">Preenchimento</MenuItem>
           </Select>
         </FormControl>
-        <Button variant="contained" onClick={handleAddPet}>
-          Adicionar Pet
+        <FormControl sx={{ minWidth: 200 }}>
+          <InputLabel>Dentista</InputLabel>
+          <Select
+            value={newPatient.dentist}
+            label="Dentista"
+            onChange={(e) => setNewPatient({ ...newPatient, dentist: e.target.value })}
+          >
+            {dentists.map((dentist) => (
+              <MenuItem key={dentist} value={dentist}>{dentist}</MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+        <Button variant="contained" onClick={handleAddPatient}>
+          Adicionar Paciente
         </Button>
       </Box>
 
-      {/* Lista de pets em serviço */}
+      {/* Lista de pacientes em procedimento */}
       <Typography variant="h6" gutterBottom>
-        Pets em Atendimento:
+        Pacientes em Atendimento:
       </Typography>
       <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
-        {pets.map((pet) => (
-          <ServiceFlow 
-            key={pet.id} 
-            pet={pet} 
+        {patients.map((patient) => (
+          <ProcedureFlow 
+            key={patient.id} 
+            patient={patient} 
             onNextStep={handleNextStep}
-            onComplete={handleCompleteService}
+            onComplete={handleCompleteProcedure}
           />
         ))}
       </Box>

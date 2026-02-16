@@ -2,7 +2,7 @@ import { useState, useContext } from 'react';
 import { AuthContext } from '../contexts/AuthContext';
 import { 
   Box, Paper, Typography, TextField, Button, 
-  CircularProgress, Alert 
+  CircularProgress, Alert, Select, MenuItem, FormControl, InputLabel
 } from '@mui/material';
 
 const LoginScreen = ({ onSwitchToRegister }) => {
@@ -22,7 +22,6 @@ const LoginScreen = ({ onSwitchToRegister }) => {
 
     try {
       await login(email, password);
-      // Login bem-sucedido - o redirecionamento é feito automaticamente
     } catch (err) {
       setError(err.message);
     }
@@ -32,7 +31,7 @@ const LoginScreen = ({ onSwitchToRegister }) => {
     <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh' }}>
       <Paper sx={{ p: 4, width: 400 }}>
         <Typography variant="h4" gutterBottom align="center">
-          Login Petshop
+          Login Clínica Odonto & Estética
         </Typography>
         
         {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
@@ -70,7 +69,7 @@ const LoginScreen = ({ onSwitchToRegister }) => {
         </form>
 
         <Button fullWidth sx={{ mt: 2 }} onClick={onSwitchToRegister}>
-          Não tem conta? Cadastre seu Petshop
+          Não tem conta? Cadastre sua Clínica
         </Button>
       </Paper>
     </Box>

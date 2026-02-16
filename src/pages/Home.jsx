@@ -1,45 +1,43 @@
 import { Box, Typography, Grid, Paper, Chip, Avatar, LinearProgress } from "@mui/material";
-import { PetsContext } from "../contexts/PetsContext";
+import { PatientsContext } from "../contexts/PatientsContext";
 import { useContext } from "react";
-import BathroomIcon from '@mui/icons-material/Bathroom';
-import ContentCutIcon from '@mui/icons-material/ContentCut';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 
 const Home = () => {
-  const { pets } = useContext(PetsContext);
+  const { patients } = useContext(PatientsContext);
 
-  // Agrupa pets por status
-  const petsByStatus = pets.reduce((acc, pet) => {
-    if (!pet.inService) return acc;
+  // Agrupa pacientes por status
+  const patientsByStatus = patients.reduce((acc, patient) => {
+    if (!patient.inProcedure) return acc;
 
     const status =
-      pet.serviceProgress === 1 ? 'Secagem' :
-        pet.serviceProgress === 2 ? 'Tosa' :
-          pet.serviceProgress >= 3 ? 'Finalizado' :
-            'Banho';
+      patient.procedureProgress === 1 ? 'Em Andamento' :
+        patient.procedureProgress === 2 ? 'Finalização' :
+          patient.procedureProgress >= 3 ? 'Finalizado' :
+            'Preparação';
 
     if (!acc[status]) acc[status] = [];
-    acc[status].push(pet);
+    acc[status].push(patient);
     return acc;
   }, {});
 
   // Cores para cada status
   const statusColors = {
-    'Banho': '#1976d2',
-    'Secagem': '#9c27b0',
-    'Tosa': '#ff9800',
+    'Preparação': '#1976d2',
+    'Em Andamento': '#9c27b0',
+    'Finalização': '#ff9800',
     'Finalizado': '#4caf50'
   };
 
   return (
     <Box sx={{ p: 3 }}>
       <Typography variant="h4" gutterBottom sx={{ mb: 4, fontWeight: 'bold' }}>
-        Panorama de Serviços
+        Panorama de Procedimentos
       </Typography>
 
       {/* Cards de Status */}
       <Grid container spacing={3} sx={{ mb: 4 }}>
-        {Object.entries(petsByStatus).map(([status, petsList]) => (
+        {Object.entries(patientsByStatus).map(([status, patientsList]) => (
           <Grid item xs={12} md={6} lg={4} key={status}>
             <Paper sx={{
               p: 2,
@@ -54,12 +52,12 @@ const Home = () => {
                   color: statusColors[status] || 'inherit'
                 }}
               >
-                {status} ({petsList.length})
+                {status} ({patientsList.length})
               </Typography>
 
-              {petsList.map(pet => (
+              {patientsList.map(patient => (
                 <Box
-                  key={pet.id}
+                  key={patient.id}
                   sx={{
                     mb: 3,
                     p: 2,
@@ -74,14 +72,17 @@ const Home = () => {
                       mr: 2,
                       color: 'white'
                     }}>
-                      {pet.name.charAt(0)}
+                      {patient.name.charAt(0)}
                     </Avatar>
                     <Box>
                       <Typography variant="subtitle1">
-                        <strong>{pet.name}</strong> ({pet.breed || 'Raça não informada'})
+                        <strong>{patient.name}</strong>
                       </Typography>
                       <Typography variant="body2" color="text.secondary">
-                        Dono: {pet.owner}
+                        {patient.procedureType}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        Dentista: {patient.dentist}
                       </Typography>
                     </Box>
                   </Box>
@@ -89,7 +90,7 @@ const Home = () => {
                   {/* Barra de progresso */}
                   <LinearProgress
                     variant="determinate"
-                    value={(pet.serviceProgress || 0) * 25}
+                    value={(patient.procedureProgress || 0) * 33}
                     sx={{
                       height: 10,
                       borderRadius: 5,
@@ -101,46 +102,21 @@ const Home = () => {
                     }}
                   />
 
-                  {/* Etapas do serviço */}
+                  {/* Etapas do procedimento */}
                   <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                    {['Banho', 'Secagem', 'Tosa', 'Finalizado'].map((etapa, index) => (
+                    {['Preparação', 'Andamento', 'Finalização', 'Concluído'].map((etapa, index) => (
                       <Chip
                         key={etapa}
                         label={etapa}
                         size="small"
-                        icon={
-                          etapa === 'Banho' ? <BathroomIcon fontSize="small" /> :
-                            etapa === 'Secagem' ? <BathroomIcon fontSize="small" /> :
-                              etapa === 'Tosa' ? <ContentCutIcon fontSize="small" /> :
-                                <CheckCircleIcon fontSize="small" />
-                        }
                         sx={{
-                          backgroundColor: pet.serviceProgress >= index ? statusColors[status] : '#e0e0e0',
-                          color: pet.serviceProgress >= index ? '#fff' : 'inherit',
+                          backgroundColor: patient.procedureProgress >= index ? statusColors[status] : '#e0e0e0',
+                          color: patient.procedureProgress >= index ? '#fff' : 'inherit',
                           minWidth: 80
                         }}
                       />
                     ))}
                   </Box>
-
-                  {pet.serviceType === "Plano Mensal" && (
-                    <Box sx={{ mt: 2, display: 'flex', justifyContent: 'center' }}>
-                      <Chip
-                        label={
-                          pet.monthlyBathsRemaining > 0
-                            ? `Banhos restantes: ${pet.monthlyBathsRemaining}/4`
-                            : "Plano esgotado - Renovar!"
-                        }
-                        color={pet.monthlyBathsRemaining > 0 ? "primary" : "error"}
-                        size="small"
-                        sx={{
-                          fontWeight: 'bold',
-                          fontSize: '0.875rem'
-                        }}
-                      />
-                    </Box>
-                  )}
-
                 </Box>
               ))}
             </Paper>
@@ -158,15 +134,15 @@ const Home = () => {
         <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold' }}>
           Resumo do Dia
         </Typography>
-        <Box sx={{ display: 'flex', gap: 4 }}>
+        <Box sx={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
           <Typography>
-            <strong>Total de Pets:</strong> <span style={{ color: '#1976d2' }}>{pets.length}</span>
+            <strong>Total de Pacientes:</strong> <span style={{ color: '#1976d2' }}>{patients.length}</span>
           </Typography>
           <Typography>
-            <strong>Em Andamento:</strong> <span style={{ color: '#9c27b0' }}>{pets.filter(p => p.inService && !p.completedToday).length}</span>
+            <strong>Em Andamento:</strong> <span style={{ color: '#9c27b0' }}>{patients.filter(p => p.inProcedure && !p.completedToday).length}</span>
           </Typography>
           <Typography>
-            <strong>Finalizados:</strong> <span style={{ color: '#4caf50' }}>{pets.filter(p => p.completedToday).length}</span>
+            <strong>Finalizados:</strong> <span style={{ color: '#4caf50' }}>{patients.filter(p => p.completedToday).length}</span>
           </Typography>
         </Box>
       </Paper>

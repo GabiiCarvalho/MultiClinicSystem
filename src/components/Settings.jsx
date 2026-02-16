@@ -11,13 +11,13 @@ import {
 } from '@mui/material';
 
 const Settings = () => {
-  const { petshopName, user, updatePetshopName } = useContext(AuthContext);
-  const [newPetshopName, setNewPetshopName] = useState(petshopName || '');
+  const { clinicName, user, updateClinicName } = useContext(AuthContext);
+  const [newClinicName, setNewClinicName] = useState(clinicName || '');
   const [message, setMessage] = useState('');
 
   const handleSave = () => {
-    updatePetshopName(newPetshopName);
-    setMessage('Nome do petshop salvo com sucesso!');
+    updateClinicName(newClinicName);
+    setMessage('Nome da clínica salvo com sucesso!');
     
     setTimeout(() => {
       setMessage('');
@@ -42,7 +42,7 @@ const Settings = () => {
 
       <Paper sx={{ p: 3, mb: 3 }}>
         <Typography variant="h6" gutterBottom>
-          Informações do Petshop
+          Informações da Clínica
         </Typography>
         <Divider sx={{ mb: 2 }} />
         
@@ -53,9 +53,9 @@ const Settings = () => {
         )}
 
         <TextField
-          label="Nome do Petshop"
-          value={newPetshopName}
-          onChange={(e) => setNewPetshopName(e.target.value)}
+          label="Nome da Clínica"
+          value={newClinicName}
+          onChange={(e) => setNewClinicName(e.target.value)}
           fullWidth
           sx={{ mb: 2 }}
         />
@@ -77,7 +77,7 @@ const Settings = () => {
         <Typography><strong>Nome:</strong> {user.nome}</Typography>
         <Typography><strong>Email:</strong> {user.email}</Typography>
         <Typography><strong>Cargo:</strong> {user.cargo === 'proprietario' ? 'Proprietário' : 'Funcionário'}</Typography>
-        <Typography><strong>ID da Loja:</strong> {user.loja_id}</Typography>
+        <Typography><strong>ID da Clínica:</strong> {user.loja_id}</Typography>
       </Paper>
     </Box>
   );

@@ -14,7 +14,7 @@ const RegisterScreen = ({ onSwitchToLogin }) => {
     phone: '',
     cnpj: '',
     address: '',
-    petshopName: ''
+    clinicName: ''
   });
   const [error, setError] = useState('');
   const { register, isLoading } = useContext(AuthContext);
@@ -43,7 +43,7 @@ const RegisterScreen = ({ onSwitchToLogin }) => {
     <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh' }}>
       <Paper sx={{ p: 4, width: 600 }}>
         <Typography variant="h4" gutterBottom align="center">
-          Cadastro do Petshop
+          Cadastro da Clínica
         </Typography>
         
         {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
@@ -52,10 +52,10 @@ const RegisterScreen = ({ onSwitchToLogin }) => {
           <Grid container spacing={2}>
             <Grid item xs={12}>
               <TextField
-                label="Nome do Petshop *"
-                name="petshopName"
+                label="Nome da Clínica *"
+                name="clinicName"
                 fullWidth
-                value={formData.petshopName}
+                value={formData.clinicName}
                 onChange={handleChange}
                 required
               />
@@ -151,7 +151,7 @@ const RegisterScreen = ({ onSwitchToLogin }) => {
             disabled={isLoading}
             sx={{ mt: 3 }}
           >
-            {isLoading ? <CircularProgress size={24} /> : 'Cadastrar Petshop'}
+            {isLoading ? <CircularProgress size={24} /> : 'Cadastrar Clínica'}
           </Button>
         </form>
 
