@@ -1,9 +1,9 @@
+// services/api.js
 import axios from 'axios';
 
 // URL da API - backend na porta 3001
-const baseURL = import.meta.env.VITE_API_URL ||
-  process.env.REACT_APP_API_URL ||
-  'http://localhost:3001/api';
+// No Vite, use import.meta.env em vez de process.env
+const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
 const api = axios.create({
   baseURL: baseURL,
@@ -27,14 +27,14 @@ api.interceptors.response.use(
       // Token expirado ou inválido
       localStorage.removeItem('token');
       localStorage.removeItem('user');
-      localStorage.removeItem('petshopName');
+      localStorage.removeItem('clinicName');
       window.location.href = '/login';
     }
 
     if (error.code === 'ECONNABORTED') {
       console.error('Timeout na requisição');
     } else if (!error.response) {
-      console.error("Erro de rede - servidor não responde");
+      console.error('Erro de rede - servidor não responde');
     }
     return Promise.reject(error);
   }

@@ -15,10 +15,9 @@ export const AuthProvider = ({ children }) => {
     if (token && userData) {
       try {
         const parsedUser = JSON.parse(userData);
-        if (parsedUser && typeof parsedUser === 'object') {
-          setUser(parsedUser);
-          api.defaults.headers.Authorization = `Bearer ${token}`;
-        }
+        setUser(parsedUser);
+        setClinicName(parsedUser.loja_nome || '');
+        api.defaults.headers.Authorization = `Bearer ${token}`;
       } catch (error) {
         console.error('Erro ao parsear user data:', error);
         localStorage.removeItem('token');
@@ -35,20 +34,15 @@ export const AuthProvider = ({ children }) => {
         senha: senha
       });
 
-      const { token, usuario, loja_nome } = response.data;
+      const { token, usuario } = response.data;
 
-      if (usuario && token) {
-        localStorage.setItem('token', token);
-        localStorage.setItem('user', JSON.stringify(usuario));
-        setUser(usuario);
-        setClinicName(loja_nome || '');
+      localStorage.setItem('token', token);
+      localStorage.setItem('user', JSON.stringify(usuario));
+      setUser(usuario);
+      setClinicName(usuario.loja_nome || '');
+      api.defaults.headers.Authorization = `Bearer ${token}`;
 
-        api.defaults.headers.Authorization = `Bearer ${token}`;
-
-        return true;
-      } else {
-        throw new Error('Dados de login inválidos');
-      }
+      return true;
     } catch (error) {
       const errorMessage = error.response?.data?.error || error.message || 'Erro ao fazer login';
       throw new Error(errorMessage);
@@ -60,17 +54,7 @@ export const AuthProvider = ({ children }) => {
   const register = async (formData) => {
     setIsLoading(true);
     try {
-      const response = await api.post('/auth/cadastrar-gestor', {
-        name: formData.name,
-        email: formData.email,
-        password: formData.password,
-        confirmPassword: formData.confirmPassword,
-        phone: formData.phone,
-        cnpj: formData.cnpj,
-        address: formData.address,
-        clinicName: formData.clinicName
-      });
-
+      const response = await api.post('/auth/cadastrar-usuario', formData);
       return response.data;
     } catch (error) {
       const errorMessage = error.response?.data?.error || error.message || 'Erro ao cadastrar';
@@ -83,30 +67,52 @@ export const AuthProvider = ({ children }) => {
   const logout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
-    localStorage.removeItem('clinicName');
     setUser(null);
     setClinicName('');
     delete api.defaults.headers.Authorization;
   };
 
-  const updateClinicName = (newName) => {
-    setClinicName(newName);
-    localStorage.setItem('clinicName', newName);
-  };
-
-  // Verificar permissões
+  // Verificar permissões baseado no cargo
   const hasPermission = (permission) => {
     if (!user) return false;
     
+    // Gestor tem todas as permissões
+    if (user.cargo === 'gestor') return true;
+    
     const permissions = {
-      'atendente': ['view_schedule', 'create_appointment', 'cancel_appointment', 'contact_patient', 'create_budget'],
-      'dentista': ['view_my_schedule', 'update_procedure_status', 'view_patient_info', 'add_observations'],
-      'financeiro': ['view_cashier', 'process_payment', 'view_financial_reports', 'issue_receipt'],
-      'gestor': ['view_all_schedules', 'manage_users', 'manage_materials', 'view_patient_flow', 'view_financial_reports', 'manage_prices', 'view_canceled_appointments']
+      financeiro: [
+        'view_dashboard',
+        'view_calendar',
+        'view_appointments',
+        'view_patient_flow',
+        'view_financial',
+        'manage_cashier',
+        'process_payments',
+        'view_reports',
+        'view_patients',
+        'view_procedures'
+      ],
+      atendente: [
+        'view_calendar',
+        'view_appointments',
+        'create_patient',
+        'edit_patient',
+        'view_patients',
+        'create_appointment',
+        'edit_appointment',
+        'cancel_appointment',
+        'contact_patient'
+      ],
+      dentista: [
+        'view_my_calendar',
+        'view_my_appointments',
+        'view_my_patients',
+        'update_procedure_status',
+        'add_observations',
+        'view_my_procedures'
+      ]
     };
 
-    if (user.cargo === 'gestor') return true; // Gestor tem todas as permissões
-    
     return permissions[user.cargo]?.includes(permission) || false;
   };
 
@@ -118,7 +124,6 @@ export const AuthProvider = ({ children }) => {
       login,
       register,
       logout,
-      updateClinicName,
       hasPermission
     }}>
       {children}

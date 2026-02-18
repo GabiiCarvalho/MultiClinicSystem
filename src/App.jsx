@@ -1,19 +1,15 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { PatientsProvider } from "./contexts/PatientsContext";
-import MainTabs from "./pages/MainTabs";
-import { ThemeProvider, createTheme } from "@mui/material/styles";
 import { AuthProvider } from "./contexts/AuthContext";
-
-const theme = createTheme({
-  palette: {
-    primary: { main: '#1976d2' },
-    secondary: { main: '#ff9800' },
-  },
-});
+import MainTabs from "./pages/MainTabs";
+import { ThemeProvider } from "@mui/material/styles";
+import { pastelTheme } from "./theme/theme";
+import CssBaseline from '@mui/material/CssBaseline';
 
 function App() {
   return (
-    <ThemeProvider theme={theme}>
+    <ThemeProvider theme={pastelTheme}>
+      <CssBaseline />
       <AuthProvider>
         <PatientsProvider>
           <BrowserRouter>
