@@ -1,5 +1,6 @@
-import { useState, useContext } from 'react';
-import { AuthContext } from '../contexts/AuthContext';
+import { useState, useContext, useEffect } from 'react';
+import { useAuth } from '../contexts/AuthContext';
+import api from '../services/api';
 import {
   Box,
   Paper,
@@ -25,7 +26,8 @@ import {
   InputLabel,
   Select,
   MenuItem,
-  Snackbar
+  Snackbar,
+  CircularProgress
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import PersonAddIcon from '@mui/icons-material/PersonAdd';
@@ -39,6 +41,7 @@ import AssignmentIndIcon from '@mui/icons-material/AssignmentInd';
 import LocationOnIcon from '@mui/icons-material/LocationOn';
 import DescriptionIcon from '@mui/icons-material/Description';
 import AccountCircleIcon from '@mui/icons-material/AccountCircle';
+import RefreshIcon from '@mui/icons-material/Refresh';
 
 const StyledCard = styled(Card)({
   borderRadius: 16,
@@ -51,6 +54,7 @@ const StyledCard = styled(Card)({
 
 const RoleChip = styled(Chip)(({ role }) => {
   const colors = {
+    proprietario: { bg: '#9C27B0', color: '#FFFFFF' },
     gestor: { bg: '#A7C7E7', color: '#4A5568' },
     financeiro: { bg: '#C5E0C5', color: '#4F7A4F' },
     atendente: { bg: '#F9D7D7', color: '#A65D5D' },
@@ -67,61 +71,15 @@ const RoleChip = styled(Chip)(({ role }) => {
 });
 
 const Settings = () => {
-  const { user, clinicName } = useContext(AuthContext);
+  const { user, clinicName } = useAuth();
   const [tabValue, setTabValue] = useState(0);
   const [openDialog, setOpenDialog] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [colaboradores, setColaboradores] = useState([]);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
-  
-  // Dados mockados para exemplo
-  const [colaboradores, setColaboradores] = useState([
-    {
-      id: 1,
-      nome: 'Ana Oliveira',
-      email: 'ana.oliveira@clinica.com',
-      telefone: '(11) 99999-9999',
-      whatsapp: '(11) 99999-9999',
-      cpf: '123.456.789-00',
-      endereco: 'Rua das Flores, 123 - São Paulo/SP',
-      cargo: 'gestor',
-      biografia: ''
-    },
-    {
-      id: 2,
-      nome: 'Carlos Santos',
-      email: 'carlos.santos@clinica.com',
-      telefone: '(11) 98888-8888',
-      whatsapp: '(11) 98888-8888',
-      cpf: '987.654.321-00',
-      endereco: 'Av. Paulista, 1000 - São Paulo/SP',
-      cargo: 'financeiro',
-      biografia: ''
-    },
-    {
-      id: 3,
-      nome: 'Mariana Costa',
-      email: 'mariana.costa@clinica.com',
-      telefone: '(11) 97777-7777',
-      whatsapp: '(11) 97777-7777',
-      cpf: '456.789.123-00',
-      endereco: 'Rua Augusta, 500 - São Paulo/SP',
-      cargo: 'atendente',
-      biografia: ''
-    },
-    {
-      id: 4,
-      nome: 'Dra. Juliana Mendes',
-      email: 'juliana.mendes@clinica.com',
-      telefone: '(11) 96666-6666',
-      whatsapp: '(11) 96666-6666',
-      cpf: '789.123.456-00',
-      endereco: 'Alameda Santos, 800 - São Paulo/SP',
-      cargo: 'dentista',
-      cro: '12345-SP',
-      biografia: 'Especialista em Odontologia Estética e Reabilitação Oral. Formada pela USP com aperfeiçoamento em Lentes de Contato Dental.'
-    }
-  ]);
 
+  // Estado para novo/edição de colaborador
   const [novoColaborador, setNovoColaborador] = useState({
     nome: '',
     email: '',
@@ -130,18 +88,55 @@ const Settings = () => {
     cpf: '',
     endereco: '',
     cargo: 'atendente',
+    especialidade: '',
     cro: '',
-    biografia: ''
+    biografia: '',
+    senha: ''
   });
+
+  // Carregar colaboradores da API
+  const carregarColaboradores = async () => {
+    setLoading(true);
+    try {
+      const response = await api.get('/pessoas/colaboradores');
+      console.log('Colaboradores carregados:', response.data);
+      setColaboradores(response.data);
+    } catch (error) {
+      console.error('Erro ao carregar colaboradores:', error);
+      showSnackbar('Erro ao carregar colaboradores', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    carregarColaboradores();
+  }, []);
+
+  const showSnackbar = (message, severity = 'success') => {
+    setSnackbar({ open: true, message, severity });
+  };
 
   const handleTabChange = (event, newValue) => {
     setTabValue(newValue);
   };
 
-  const handleOpenDialog = (user = null) => {
-    if (user) {
-      setEditingUser(user);
-      setNovoColaborador(user);
+  const handleOpenDialog = (colaborador = null) => {
+    if (colaborador) {
+      setEditingUser(colaborador);
+      setNovoColaborador({
+        nome: colaborador.nome || '',
+        email: colaborador.email || '',
+        telefone: colaborador.telefone || '',
+        whatsapp: colaborador.whatsapp || colaborador.telefone || '',
+        cpf: colaborador.cpf || '',
+        endereco: colaborador.endereco || '',
+        cargo: colaborador.cargo || 'atendente',
+        especialidade: colaborador.especialidade || '',
+        cro: colaborador.cro || '',
+        biografia: colaborador.biografia || '',
+        senha: '' // Senha não vem do backend
+      });
     } else {
       setEditingUser(null);
       setNovoColaborador({
@@ -152,8 +147,10 @@ const Settings = () => {
         cpf: '',
         endereco: '',
         cargo: 'atendente',
+        especialidade: '',
         cro: '',
-        biografia: ''
+        biografia: '',
+        senha: ''
       });
     }
     setOpenDialog(true);
@@ -164,37 +161,61 @@ const Settings = () => {
     setEditingUser(null);
   };
 
-  const handleSaveColaborador = () => {
-    if (editingUser) {
-      // Editar existente
-      setColaboradores(prev => prev.map(c => 
-        c.id === editingUser.id ? { ...novoColaborador, id: c.id } : c
-      ));
-      setSnackbar({
-        open: true,
-        message: 'Colaborador atualizado com sucesso!',
-        severity: 'success'
-      });
-    } else {
-      // Adicionar novo
-      const novoId = Math.max(...colaboradores.map(c => c.id)) + 1;
-      setColaboradores(prev => [...prev, { ...novoColaborador, id: novoId }]);
-      setSnackbar({
-        open: true,
-        message: 'Colaborador adicionado com sucesso!',
-        severity: 'success'
-      });
+  const handleSaveColaborador = async () => {
+    // Validações básicas
+    if (!novoColaborador.nome || !novoColaborador.email || !novoColaborador.telefone) {
+      showSnackbar('Preencha nome, email e telefone!', 'error');
+      return;
     }
-    handleCloseDialog();
+
+    if (!editingUser && !novoColaborador.senha) {
+      showSnackbar('Senha é obrigatória para novo colaborador!', 'error');
+      return;
+    }
+
+    if (novoColaborador.cargo === 'dentista' && !novoColaborador.cro) {
+      showSnackbar('CRO é obrigatório para dentistas!', 'error');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      if (editingUser) {
+        // Atualizar colaborador existente
+        await api.put(`/pessoas/colaboradores/${editingUser.id}`, novoColaborador);
+        showSnackbar('Colaborador atualizado com sucesso!');
+      } else {
+        // Criar novo colaborador
+        await api.post('/pessoas/colaboradores', novoColaborador);
+        showSnackbar('Colaborador adicionado com sucesso!');
+      }
+      
+      // Recarregar lista
+      await carregarColaboradores();
+      handleCloseDialog();
+    } catch (error) {
+      console.error('Erro ao salvar colaborador:', error);
+      const mensagem = error.response?.data?.error || 'Erro ao salvar colaborador';
+      showSnackbar(mensagem, 'error');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleDeleteColaborador = (id) => {
-    setColaboradores(prev => prev.filter(c => c.id !== id));
-    setSnackbar({
-      open: true,
-      message: 'Colaborador removido com sucesso!',
-      severity: 'success'
-    });
+  const handleDeleteColaborador = async (id) => {
+    if (!window.confirm('Tem certeza que deseja remover este colaborador?')) return;
+
+    setLoading(true);
+    try {
+      await api.delete(`/pessoas/colaboradores/${id}`);
+      showSnackbar('Colaborador removido com sucesso!');
+      await carregarColaboradores();
+    } catch (error) {
+      console.error('Erro ao remover colaborador:', error);
+      showSnackbar('Erro ao remover colaborador', 'error');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleChange = (e) => {
@@ -204,8 +225,24 @@ const Settings = () => {
     });
   };
 
-  // Verifica se é gestor
-  if (user?.cargo !== 'gestor') {
+  const getRoleLabel = (cargo) => {
+    const labels = {
+      proprietario: '👑 Proprietário',
+      gestor: '👑 Gestor',
+      financeiro: '💰 Financeiro',
+      atendente: '📋 Atendente',
+      dentista: '🦷 Dentista'
+    };
+    return labels[cargo] || cargo;
+  };
+
+  // Verificar permissão (gestor ou proprietário)
+  const temPermissao = () => {
+    const cargo = user?.cargo || '';
+    return cargo === 'gestor' || cargo === 'proprietario';
+  };
+
+  if (!temPermissao()) {
     return (
       <Box sx={{ p: 3 }}>
         <Paper sx={{ p: 6, textAlign: 'center', borderRadius: 3 }}>
@@ -214,10 +251,10 @@ const Settings = () => {
             Acesso Restrito
           </Typography>
           <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-            Apenas gestores podem acessar as configurações do sistema.
+            Apenas gestores e proprietários podem acessar as configurações do sistema.
           </Typography>
           <Chip 
-            label={`Seu cargo: ${user?.cargo || 'Não informado'}`}
+            label={`Seu cargo: ${getRoleLabel(user?.cargo) || 'Não informado'}`}
             sx={{ bgcolor: '#F0F4F8', color: '#4A5568' }}
           />
         </Paper>
@@ -226,10 +263,11 @@ const Settings = () => {
   }
 
   const filteredColaboradores = colaboradores.filter(c => {
+    const cargo = c.cargo || '';
     if (tabValue === 0) return true;
-    if (tabValue === 1) return c.cargo === 'atendente';
-    if (tabValue === 2) return c.cargo === 'financeiro';
-    if (tabValue === 3) return c.cargo === 'dentista';
+    if (tabValue === 1) return cargo === 'atendente';
+    if (tabValue === 2) return cargo === 'financeiro';
+    if (tabValue === 3) return cargo === 'dentista';
     return true;
   });
 
@@ -237,25 +275,37 @@ const Settings = () => {
     <Box sx={{ p: 3 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Typography variant="h4" sx={{ fontWeight: 600, color: '#4A5568' }}>
-          ⚙️ Configurações
+          ⚙️ Configurações - {clinicName || 'Clínica'}
         </Typography>
-        <Button
-          variant="contained"
-          startIcon={<PersonAddIcon />}
-          onClick={() => handleOpenDialog()}
-          sx={{
-            borderRadius: 30,
-            px: 3,
-            py: 1,
-            background: 'linear-gradient(135deg, #A7C7E7 0%, #F9D7D7 100%)',
-            color: '#4A5568',
-            '&:hover': {
-              background: 'linear-gradient(135deg, #8FB0D0 0%, #E5B7B7 100%)',
-            },
-          }}
-        >
-          Novo Colaborador
-        </Button>
+        <Box sx={{ display: 'flex', gap: 2 }}>
+          <Button
+            variant="outlined"
+            startIcon={<RefreshIcon />}
+            onClick={carregarColaboradores}
+            disabled={loading}
+            sx={{ borderRadius: 30 }}
+          >
+            Recarregar
+          </Button>
+          <Button
+            variant="contained"
+            startIcon={<PersonAddIcon />}
+            onClick={() => handleOpenDialog()}
+            disabled={loading}
+            sx={{
+              borderRadius: 30,
+              px: 3,
+              py: 1,
+              background: 'linear-gradient(135deg, #A7C7E7 0%, #F9D7D7 100%)',
+              color: '#4A5568',
+              '&:hover': {
+                background: 'linear-gradient(135deg, #8FB0D0 0%, #E5B7B7 100%)',
+              },
+            }}
+          >
+            Novo Colaborador
+          </Button>
+        </Box>
       </Box>
 
       <Grid container spacing={3}>
@@ -270,7 +320,13 @@ const Settings = () => {
               <Box>
                 <Typography variant="caption" color="text.secondary">Nome da Clínica</Typography>
                 <Typography variant="body1" sx={{ fontWeight: 500 }}>
-                  {clinicName || 'Não informado'}
+                  {clinicName || user?.loja_nome || 'Não informado'}
+                </Typography>
+              </Box>
+              <Box>
+                <Typography variant="caption" color="text.secondary">Usuário Logado</Typography>
+                <Typography variant="body1" sx={{ fontWeight: 500 }}>
+                  {user?.nome} ({getRoleLabel(user?.cargo)})
                 </Typography>
               </Box>
               <Box>
@@ -282,10 +338,31 @@ const Settings = () => {
               <Box>
                 <Typography variant="caption" color="text.secondary">Distribuição</Typography>
                 <Box sx={{ display: 'flex', gap: 1, mt: 1, flexWrap: 'wrap' }}>
-                  <Chip label={`👑 Gestores: ${colaboradores.filter(c => c.cargo === 'gestor').length}`} size="small" />
-                  <Chip label={`💰 Financeiro: ${colaboradores.filter(c => c.cargo === 'financeiro').length}`} size="small" />
-                  <Chip label={`📋 Atendentes: ${colaboradores.filter(c => c.cargo === 'atendente').length}`} size="small" />
-                  <Chip label={`🦷 Dentistas: ${colaboradores.filter(c => c.cargo === 'dentista').length}`} size="small" />
+                  <Chip 
+                    label={`👑 Proprietários: ${colaboradores.filter(c => c.cargo === 'proprietario').length}`} 
+                    size="small" 
+                    sx={{ bgcolor: '#9C27B0', color: 'white' }}
+                  />
+                  <Chip 
+                    label={`👑 Gestores: ${colaboradores.filter(c => c.cargo === 'gestor').length}`} 
+                    size="small" 
+                    sx={{ bgcolor: '#A7C7E7', color: '#4A5568' }}
+                  />
+                  <Chip 
+                    label={`💰 Financeiro: ${colaboradores.filter(c => c.cargo === 'financeiro').length}`} 
+                    size="small" 
+                    sx={{ bgcolor: '#C5E0C5', color: '#4F7A4F' }}
+                  />
+                  <Chip 
+                    label={`📋 Atendentes: ${colaboradores.filter(c => c.cargo === 'atendente').length}`} 
+                    size="small" 
+                    sx={{ bgcolor: '#F9D7D7', color: '#A65D5D' }}
+                  />
+                  <Chip 
+                    label={`🦷 Dentistas: ${colaboradores.filter(c => c.cargo === 'dentista').length}`} 
+                    size="small" 
+                    sx={{ bgcolor: '#FFE5B4', color: '#B87C4A' }}
+                  />
                 </Box>
               </Box>
             </Box>
@@ -303,46 +380,59 @@ const Settings = () => {
                 '& .MuiTab-root': { py: 2 }
               }}
             >
-              <Tab label="Todos" />
-              <Tab label="Atendentes" />
-              <Tab label="Financeiro" />
-              <Tab label="Dentistas" />
+              <Tab label={`Todos (${colaboradores.length})`} />
+              <Tab label={`Atendentes (${colaboradores.filter(c => c.cargo === 'atendente').length})`} />
+              <Tab label={`Financeiro (${colaboradores.filter(c => c.cargo === 'financeiro').length})`} />
+              <Tab label={`Dentistas (${colaboradores.filter(c => c.cargo === 'dentista').length})`} />
             </Tabs>
 
-            <Box sx={{ p: 3 }}>
+            <Box sx={{ p: 3, maxHeight: '600px', overflow: 'auto' }}>
+              {loading && (
+                <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+                  <CircularProgress />
+                </Box>
+              )}
+              
+              {!loading && filteredColaboradores.length === 0 && (
+                <Box sx={{ textAlign: 'center', p: 4 }}>
+                  <Typography color="text.secondary">
+                    Nenhum colaborador encontrado nesta categoria.
+                  </Typography>
+                </Box>
+              )}
+
               <Grid container spacing={2}>
                 {filteredColaboradores.map(colab => (
                   <Grid item xs={12} key={colab.id}>
                     <StyledCard>
                       <CardContent>
                         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                          <Box sx={{ display: 'flex', gap: 2 }}>
+                          <Box sx={{ display: 'flex', gap: 2, flex: 1 }}>
                             <Avatar sx={{ 
-                              bgcolor: colab.cargo === 'gestor' ? '#A7C7E7' :
+                              bgcolor: colab.cargo === 'proprietario' ? '#9C27B0' :
+                                      colab.cargo === 'gestor' ? '#A7C7E7' :
                                       colab.cargo === 'financeiro' ? '#C5E0C5' :
                                       colab.cargo === 'dentista' ? '#FFE5B4' : '#F9D7D7',
-                              color: '#4A5568',
+                              color: colab.cargo === 'proprietario' ? '#FFFFFF' : '#4A5568',
                               width: 56,
                               height: 56
                             }}>
-                              {colab.nome.charAt(0)}
+                              {colab.nome?.charAt(0).toUpperCase() || '?'}
                             </Avatar>
                             
-                            <Box>
-                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                            <Box sx={{ flex: 1 }}>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1, flexWrap: 'wrap' }}>
                                 <Typography variant="h6" sx={{ fontWeight: 600 }}>
                                   {colab.nome}
                                 </Typography>
                                 <RoleChip 
-                                  label={colab.cargo === 'gestor' ? '👑 Gestor' :
-                                         colab.cargo === 'financeiro' ? '💰 Financeiro' :
-                                         colab.cargo === 'dentista' ? '🦷 Dentista' : '📋 Atendente'}
+                                  label={getRoleLabel(colab.cargo)}
                                   role={colab.cargo}
                                   size="small"
                                 />
                               </Box>
 
-                              <Grid container spacing={2} sx={{ mt: 1 }}>
+                              <Grid container spacing={2}>
                                 <Grid item xs={12} sm={6}>
                                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                                     <EmailIcon sx={{ fontSize: 18, color: '#A7C7E7' }} />
@@ -358,27 +448,35 @@ const Settings = () => {
                                 <Grid item xs={12} sm={6}>
                                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                                     <WhatsAppIcon sx={{ fontSize: 18, color: '#25D366' }} />
-                                    <Typography variant="body2">{colab.whatsapp}</Typography>
+                                    <Typography variant="body2">{colab.whatsapp || colab.telefone}</Typography>
                                   </Box>
                                 </Grid>
                                 <Grid item xs={12} sm={6}>
                                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                                     <BadgeIcon sx={{ fontSize: 18, color: '#C5E0C5' }} />
-                                    <Typography variant="body2">CPF: {colab.cpf}</Typography>
+                                    <Typography variant="body2">CPF: {colab.cpf || 'Não informado'}</Typography>
                                   </Box>
                                 </Grid>
                                 {colab.cargo === 'dentista' && (
-                                  <Grid item xs={12}>
-                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                      <AssignmentIndIcon sx={{ fontSize: 18, color: '#B87C4A' }} />
-                                      <Typography variant="body2">CRO: {colab.cro}</Typography>
-                                    </Box>
-                                  </Grid>
+                                  <>
+                                    <Grid item xs={12} sm={6}>
+                                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                        <AssignmentIndIcon sx={{ fontSize: 18, color: '#B87C4A' }} />
+                                        <Typography variant="body2">CRO: {colab.cro || 'Não informado'}</Typography>
+                                      </Box>
+                                    </Grid>
+                                    <Grid item xs={12} sm={6}>
+                                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                        <DescriptionIcon sx={{ fontSize: 18, color: '#A7C7E7' }} />
+                                        <Typography variant="body2">Especialidade: {colab.especialidade || 'Não informada'}</Typography>
+                                      </Box>
+                                    </Grid>
+                                  </>
                                 )}
                                 <Grid item xs={12}>
                                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                                     <LocationOnIcon sx={{ fontSize: 18, color: '#FFE5B4' }} />
-                                    <Typography variant="body2">{colab.endereco}</Typography>
+                                    <Typography variant="body2">{colab.endereco || 'Endereço não informado'}</Typography>
                                   </Box>
                                 </Grid>
                                 {colab.biografia && (
@@ -403,12 +501,12 @@ const Settings = () => {
                             </Box>
                           </Box>
 
-                          <Box>
-                            <IconButton onClick={() => handleOpenDialog(colab)} size="small">
-                              <EditIcon sx={{ fontSize: 20, color: '#A7C7E7' }} />
+                          <Box sx={{ display: 'flex', gap: 1 }}>
+                            <IconButton onClick={() => handleOpenDialog(colab)} size="small" sx={{ color: '#A7C7E7' }}>
+                              <EditIcon />
                             </IconButton>
-                            <IconButton onClick={() => handleDeleteColaborador(colab.id)} size="small">
-                              <DeleteIcon sx={{ fontSize: 20, color: '#F9D7D7' }} />
+                            <IconButton onClick={() => handleDeleteColaborador(colab.id)} size="small" sx={{ color: '#F9D7D7' }}>
+                              <DeleteIcon />
                             </IconButton>
                           </Box>
                         </Box>
@@ -444,6 +542,7 @@ const Settings = () => {
                 label="Nome Completo *"
                 value={novoColaborador.nome}
                 onChange={handleChange}
+                required
                 InputProps={{
                   startAdornment: (
                     <InputAdornment position="start">
@@ -455,7 +554,7 @@ const Settings = () => {
             </Grid>
             
             <Grid item xs={12} sm={6}>
-              <FormControl fullWidth>
+              <FormControl fullWidth required>
                 <InputLabel>Cargo *</InputLabel>
                 <Select
                   name="cargo"
@@ -463,10 +562,11 @@ const Settings = () => {
                   label="Cargo *"
                   onChange={handleChange}
                 >
-                  <MenuItem value="atendente">📋 Atendente</MenuItem>
-                  <MenuItem value="financeiro">💰 Financeiro</MenuItem>
-                  <MenuItem value="dentista">🦷 Dentista</MenuItem>
+                  <MenuItem value="proprietario">👑 Proprietário</MenuItem>
                   <MenuItem value="gestor">👑 Gestor</MenuItem>
+                  <MenuItem value="financeiro">💰 Financeiro</MenuItem>
+                  <MenuItem value="atendente">📋 Atendente</MenuItem>
+                  <MenuItem value="dentista">🦷 Dentista</MenuItem>
                 </Select>
               </FormControl>
             </Grid>
@@ -479,6 +579,7 @@ const Settings = () => {
                 type="email"
                 value={novoColaborador.email}
                 onChange={handleChange}
+                required
                 InputProps={{
                   startAdornment: (
                     <InputAdornment position="start">
@@ -489,6 +590,27 @@ const Settings = () => {
               />
             </Grid>
 
+            {!editingUser && (
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  name="senha"
+                  label="Senha *"
+                  type="password"
+                  value={novoColaborador.senha}
+                  onChange={handleChange}
+                  required={!editingUser}
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <BadgeIcon sx={{ color: '#C5E0C5' }} />
+                      </InputAdornment>
+                    ),
+                  }}
+                />
+              </Grid>
+            )}
+
             <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth
@@ -496,6 +618,7 @@ const Settings = () => {
                 label="Telefone *"
                 value={novoColaborador.telefone}
                 onChange={handleChange}
+                required
                 placeholder="(00) 00000-0000"
                 InputProps={{
                   startAdornment: (
@@ -511,7 +634,7 @@ const Settings = () => {
               <TextField
                 fullWidth
                 name="whatsapp"
-                label="WhatsApp *"
+                label="WhatsApp"
                 value={novoColaborador.whatsapp}
                 onChange={handleChange}
                 placeholder="(00) 00000-0000"
@@ -529,7 +652,7 @@ const Settings = () => {
               <TextField
                 fullWidth
                 name="cpf"
-                label="CPF *"
+                label="CPF"
                 value={novoColaborador.cpf}
                 onChange={handleChange}
                 placeholder="000.000.000-00"
@@ -547,7 +670,7 @@ const Settings = () => {
               <TextField
                 fullWidth
                 name="endereco"
-                label="Endereço *"
+                label="Endereço"
                 value={novoColaborador.endereco}
                 onChange={handleChange}
                 multiline
@@ -571,11 +694,30 @@ const Settings = () => {
                     label="CRO *"
                     value={novoColaborador.cro}
                     onChange={handleChange}
+                    required
                     placeholder="00000-UF"
                     InputProps={{
                       startAdornment: (
                         <InputAdornment position="start">
                           <AssignmentIndIcon sx={{ color: '#B87C4A' }} />
+                        </InputAdornment>
+                      ),
+                    }}
+                  />
+                </Grid>
+
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    fullWidth
+                    name="especialidade"
+                    label="Especialidade"
+                    value={novoColaborador.especialidade}
+                    onChange={handleChange}
+                    placeholder="Ex: Odontologia Geral, Estética, etc."
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <DescriptionIcon sx={{ color: '#A7C7E7' }} />
                         </InputAdornment>
                       ),
                     }}
@@ -606,12 +748,13 @@ const Settings = () => {
           </Grid>
         </DialogContent>
         <DialogActions sx={{ p: 3 }}>
-          <Button onClick={handleCloseDialog} sx={{ borderRadius: 30 }}>
+          <Button onClick={handleCloseDialog} sx={{ borderRadius: 30 }} disabled={loading}>
             Cancelar
           </Button>
           <Button
             onClick={handleSaveColaborador}
             variant="contained"
+            disabled={loading}
             sx={{
               borderRadius: 30,
               px: 4,
@@ -622,7 +765,7 @@ const Settings = () => {
               },
             }}
           >
-            {editingUser ? 'Salvar' : 'Adicionar'}
+            {loading ? <CircularProgress size={24} /> : (editingUser ? 'Salvar' : 'Adicionar')}
           </Button>
         </DialogActions>
       </Dialog>
@@ -633,10 +776,7 @@ const Settings = () => {
         onClose={() => setSnackbar({ ...snackbar, open: false })}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
       >
-        <Alert 
-          severity={snackbar.severity}
-          sx={{ borderRadius: 30 }}
-        >
+        <Alert severity={snackbar.severity} sx={{ borderRadius: 30 }}>
           {snackbar.message}
         </Alert>
       </Snackbar>

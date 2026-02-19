@@ -1,6 +1,5 @@
 import React, { createContext, useState, useEffect } from "react";
 
-// Criar e exportar o contexto
 export const PatientsContext = createContext();
 
 export const PatientsProvider = ({ children }) => {
@@ -17,7 +16,9 @@ export const PatientsProvider = ({ children }) => {
                 const patientsWithDates = parsed.map(p => ({
                     ...p,
                     scheduleDate: p.scheduleDate ? new Date(p.scheduleDate) : null,
-                    birthDate: p.birthDate ? new Date(p.birthDate) : null
+                    birthDate: p.birthDate ? new Date(p.birthDate) : null,
+                    // Garantir que todos os pacientes tenham status
+                    status: p.status || (p.pago ? 'agendado' : 'pendente_pagamento')
                 }));
                 setPatients(patientsWithDates);
             } else {
@@ -34,10 +35,12 @@ export const PatientsProvider = ({ children }) => {
                         procedureProgress: 0,
                         completedToday: false,
                         status: 'agendado',
+                        pago: true,
                         procedureType: "Consulta Odontológica",
                         dentist: "Dra. Ana Silva",
                         observations: "Paciente ansioso, precisa de atendimento calmo",
                         scheduleDate: new Date(new Date().setHours(10, 0, 0, 0)),
+                        valor: 150
                     },
                     {
                         id: 2,
@@ -50,10 +53,12 @@ export const PatientsProvider = ({ children }) => {
                         procedureProgress: 1,
                         completedToday: false,
                         status: 'em_procedimento',
+                        pago: true,
                         procedureType: "Limpeza Dental",
                         dentist: "Dr. Carlos Santos",
                         observations: "",
                         scheduleDate: new Date(new Date().setHours(14, 0, 0, 0)),
+                        valor: 200
                     },
                     {
                         id: 3,
@@ -66,27 +71,12 @@ export const PatientsProvider = ({ children }) => {
                         procedureProgress: 0,
                         completedToday: true,
                         status: 'finalizado',
+                        pago: true,
                         procedureType: "Canal",
                         dentist: "Dra. Mariana Oliveira",
                         observations: "Tratamento de canal no dente 36",
                         scheduleDate: new Date(new Date().setHours(9, 0, 0, 0)),
-                    },
-                    {
-                        id: 4,
-                        name: "Ana Paula Mendes",
-                        phone: "+5511666666666",
-                        email: "ana@email.com",
-                        cpf: "789.123.456-00",
-                        birthDate: new Date('1985-11-28'),
-                        inProcedure: false,
-                        procedureProgress: 0,
-                        completedToday: false,
-                        status: 'cancelado',
-                        procedureType: "Aplicação de Botox",
-                        dentist: "Dra. Juliana Costa",
-                        observations: "Primeira aplicação",
-                        scheduleDate: new Date(new Date().setDate(new Date().getDate() + 1)),
-                        cancelReason: "Paciente desmarcou por problemas pessoais"
+                        valor: 1200
                     }
                 ];
                 setPatients(initialPatients);
@@ -166,12 +156,18 @@ export const PatientsProvider = ({ children }) => {
             ...newPatient,
             id: Date.now(),
             inProcedure: false,
-            status: 'agendado',
+            status: newPatient.pago ? 'agendado' : 'pendente_pagamento',
             procedureProgress: 0,
             completedToday: false,
             cancelReason: null
         };
         setPatients(prev => [...prev, patient]);
+        
+        // Se não estiver pago, retorna para redirecionar ao caixa
+        if (!newPatient.pago) {
+            return { ...patient, redirectToCashier: true };
+        }
+        return patient;
     };
 
     const updatePatientSchedule = (patientId, newDate) => {
@@ -188,21 +184,50 @@ export const PatientsProvider = ({ children }) => {
 
     const getPatientsByStatus = () => {
         try {
+            const aguardando = patients.filter(p => p && p.status === 'agendado' && p.pago === true);
+            const pendentes = patients.filter(p => p && p.status === 'pendente_pagamento');
+            const em_procedimento = patients.filter(p => p && p.status === 'em_procedimento');
+            const finalizado = patients.filter(p => p && p.status === 'finalizado');
+            const cancelado = patients.filter(p => p && p.status === 'cancelado');
+            
+            console.log('Status dos pacientes:', {
+                aguardando: aguardando.length,
+                pendentes: pendentes.length,
+                em_procedimento: em_procedimento.length,
+                finalizado: finalizado.length,
+                cancelado: cancelado.length
+            });
+            
             return {
-                aguardando: patients.filter(p => p && p.status === 'agendado'),
-                em_procedimento: patients.filter(p => p && p.status === 'em_procedimento'),
-                finalizado: patients.filter(p => p && p.status === 'finalizado'),
-                cancelado: patients.filter(p => p && p.status === 'cancelado')
+                aguardando,
+                pendentes,
+                em_procedimento,
+                finalizado,
+                cancelado
             };
         } catch (error) {
             console.error('Erro em getPatientsByStatus:', error);
             return {
                 aguardando: [],
+                pendentes: [],
                 em_procedimento: [],
                 finalizado: [],
                 cancelado: []
             };
         }
+    };
+
+    const marcarComoPago = (patientId) => {
+        setPatients(prev => prev.map(patient => {
+            if (patient.id === patientId) {
+                return {
+                    ...patient,
+                    pago: true,
+                    status: 'agendado'
+                };
+            }
+            return patient;
+        }));
     };
 
     const value = {
@@ -215,6 +240,7 @@ export const PatientsProvider = ({ children }) => {
         completeProcedure,
         updatePatientSchedule,
         getPatientsByStatus,
+        marcarComoPago,
         loading
     };
 

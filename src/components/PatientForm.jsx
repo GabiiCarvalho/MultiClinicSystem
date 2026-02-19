@@ -4,8 +4,7 @@ import { PatientsContext } from "../contexts/PatientsContext";
 import {
   TextField, Button, Typography, Box,
   MenuItem, Paper, Container, Tabs, Tab,
-  Autocomplete, Chip, Alert, Avatar,
-  FormGroup, Grid
+  Autocomplete, Grid
 } from "@mui/material";
 import { DatePicker, TimePicker } from '@mui/x-date-pickers';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -16,7 +15,7 @@ import 'react-phone-input-2/lib/style.css';
 import 'react-toastify/dist/ReactToastify.css';
 
 const PatientForm = ({ onChangeTab }) => {
-  const { patients, setPatients } = useContext(PatientsContext);
+  const { patients, setPatients, addPatient } = useContext(PatientsContext);
   const [localTabValue, setLocalTabValue] = useState(0);
   const [searchInput, setSearchInput] = useState("");
   const [selectedPatient, setSelectedPatient] = useState(null);
@@ -92,16 +91,58 @@ const PatientForm = ({ onChangeTab }) => {
       return;
     }
 
+    // Combinar data e hora
+    const scheduleDateTime = new Date(newPatientForm.scheduleDate);
+    scheduleDateTime.setHours(
+      newPatientForm.scheduleTime.getHours(),
+      newPatientForm.scheduleTime.getMinutes()
+    );
+
+    const valor = procedurePrices[newPatientForm.procedureType] || 150;
+
     const newPatient = {
-      ...newPatientForm,
       id: Date.now(),
+      name: newPatientForm.name,
+      nome: newPatientForm.name,
+      phone: newPatientForm.phone,
+      telefone: newPatientForm.phone,
+      email: newPatientForm.email,
+      cpf: newPatientForm.cpf,
+      birthDate: newPatientForm.birthDate,
+      procedureType: newPatientForm.procedureType,
+      procedimento: newPatientForm.procedureType,
+      dentist: newPatientForm.dentist,
+      observations: newPatientForm.observations,
+      scheduleDate: scheduleDateTime,
       inProcedure: false,
       procedureProgress: 0,
-      completedToday: false
+      completedToday: false,
+      status: 'pendente_pagamento',
+      pago: false,
+      valor: valor
     };
 
-    setPatients([...patients, newPatient]);
+    // Adicionar ao contexto
+    addPatient(newPatient);
+
+    // Salvar no localStorage para o caixa pegar
+    localStorage.setItem('pendingPayment', JSON.stringify({
+      patient: {
+        id: newPatient.id,
+        name: newPatient.name,
+        nome: newPatient.nome,
+        phone: newPatient.phone,
+        telefone: newPatient.telefone
+      },
+      procedure: newPatientForm.procedureType,
+      valor: valor,
+      dentist: newPatientForm.dentist,
+      agendamento: newPatient
+    }));
+
+    toast.success("Paciente cadastrado! Redirecionando para o caixa...");
     
+    // Limpar formulário
     setNewPatientForm({
       name: "",
       phone: "",
@@ -115,8 +156,19 @@ const PatientForm = ({ onChangeTab }) => {
       scheduleTime: new Date()
     });
 
-    toast.success("Paciente cadastrado com sucesso! Você será redirecionado para o caixa para finalizar o pagamento.");
-    onChangeTab(6);
+    // Redirecionar para a aba do caixa
+    setTimeout(() => {
+      if (onChangeTab) {
+        try {
+          onChangeTab(6); // Tenta índice 6 (caixa para gestor)
+        } catch {
+          onChangeTab(2); // Fallback para índice 2 (caixa para atendente)
+        }
+      } else {
+        console.error('onChangeTab não está disponível');
+        window.location.href = '/caixa'; // Fallback para rota
+      }
+    }, 2000);
   };
 
   const handleQuickScheduleSubmit = (e) => {
@@ -126,22 +178,88 @@ const PatientForm = ({ onChangeTab }) => {
       return;
     }
 
-    localStorage.setItem('pendingServiceSchedule', JSON.stringify({
-      patient: selectedPatient,
+    // Combinar data e hora
+    const scheduleDateTime = new Date(quickScheduleForm.scheduleDate);
+    scheduleDateTime.setHours(
+      quickScheduleForm.scheduleTime.getHours(),
+      quickScheduleForm.scheduleTime.getMinutes()
+    );
+
+    const valor = procedurePrices[quickScheduleForm.procedureType] || 150;
+
+    // Criar um agendamento pendente
+    const novoAgendamento = {
+      id: Date.now(),
+      patientId: selectedPatient.id,
+      patientName: selectedPatient.name || selectedPatient.nome,
+      patientPhone: selectedPatient.phone || selectedPatient.telefone,
+      name: selectedPatient.name || selectedPatient.nome,
+      nome: selectedPatient.name || selectedPatient.nome,
+      phone: selectedPatient.phone || selectedPatient.telefone,
+      telefone: selectedPatient.phone || selectedPatient.telefone,
+      email: selectedPatient.email,
       procedureType: quickScheduleForm.procedureType,
+      procedimento: quickScheduleForm.procedureType,
       dentist: quickScheduleForm.dentist,
-      scheduleDate: quickScheduleForm.scheduleDate,
-      scheduleTime: quickScheduleForm.scheduleTime,
-      observations: quickScheduleForm.observations
+      scheduleDate: scheduleDateTime,
+      observations: quickScheduleForm.observations,
+      valor: valor,
+      status: 'pendente_pagamento',
+      pago: false,
+      inProcedure: false,
+      procedureProgress: 0,
+      completedToday: false
+    };
+
+    // Adicionar ao contexto
+    addPatient(novoAgendamento);
+
+    // Salvar no localStorage para o caixa processar
+    localStorage.setItem('pendingPayment', JSON.stringify({
+      patient: {
+        id: selectedPatient.id,
+        name: selectedPatient.name || selectedPatient.nome,
+        nome: selectedPatient.name || selectedPatient.nome,
+        phone: selectedPatient.phone || selectedPatient.telefone,
+        telefone: selectedPatient.phone || selectedPatient.telefone
+      },
+      procedure: quickScheduleForm.procedureType,
+      valor: valor,
+      dentist: quickScheduleForm.dentist,
+      agendamento: novoAgendamento
     }));
 
-    onChangeTab(6);
-    toast.info("Você será redirecionado ao caixa para finalizar");
+    toast.info("Agendamento criado! Redirecionando para o caixa para pagamento");
+    
+    // Limpar formulário
+    setQuickScheduleForm({
+      procedureType: "Consulta Odontológica",
+      dentist: "Dra. Ana Silva",
+      scheduleDate: new Date(),
+      scheduleTime: new Date(),
+      observations: ""
+    });
+    setSelectedPatient(null);
+    setSearchInput("");
+
+    // Redirecionar para a aba do caixa
+    setTimeout(() => {
+      if (onChangeTab) {
+        try {
+          onChangeTab(6); // Tenta índice 6 (caixa para gestor)
+        } catch {
+          onChangeTab(2); // Fallback para índice 2 (caixa para atendente)
+        }
+      } else {
+        console.error('onChangeTab não está disponível');
+        window.location.href = '/caixa'; // Fallback para rota
+      }
+    }, 2000);
   };
 
   const filteredPatients = patients.filter(patient =>
-    patient.name.toLowerCase().includes(searchInput.toLowerCase()) ||
-    patient.phone.includes(searchInput)
+    (patient.name || '').toLowerCase().includes(searchInput.toLowerCase()) ||
+    (patient.phone || '').includes(searchInput)
   );
 
   return (
@@ -163,7 +281,7 @@ const PatientForm = ({ onChangeTab }) => {
 
               <Autocomplete
                 options={filteredPatients}
-                getOptionLabel={(option) => `${option.name} (${option.phone})`}
+                getOptionLabel={(option) => `${option.name || option.nome} (${option.phone || option.telefone})`}
                 inputValue={searchInput}
                 onInputChange={(e, newValue) => setSearchInput(newValue)}
                 onChange={(e, newValue) => setSelectedPatient(newValue)}
@@ -173,9 +291,9 @@ const PatientForm = ({ onChangeTab }) => {
                 renderOption={(props, option) => (
                   <Box component="li" {...props}>
                     <Box>
-                      <Typography>{option.name}</Typography>
+                      <Typography>{option.name || option.nome}</Typography>
                       <Typography variant="body2" color="text.secondary">
-                        {option.phone} • {option.email || 'Sem email'}
+                        {option.phone || option.telefone} • {option.email || 'Sem email'}
                       </Typography>
                     </Box>
                   </Box>
@@ -185,10 +303,10 @@ const PatientForm = ({ onChangeTab }) => {
               {selectedPatient && (
                 <Box sx={{ mb: 2, p: 2, backgroundColor: '#f5f5f5', borderRadius: 1 }}>
                   <Typography variant="subtitle1" fontWeight="bold">
-                    {selectedPatient.name}
+                    {selectedPatient.name || selectedPatient.nome}
                   </Typography>
                   <Typography variant="body2">
-                    Telefone: {selectedPatient.phone}
+                    Telefone: {selectedPatient.phone || selectedPatient.telefone}
                   </Typography>
                   {selectedPatient.email && (
                     <Typography variant="body2">

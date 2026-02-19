@@ -1,10 +1,10 @@
-import { useContext, useState } from "react";
+import { useContext, useState, useEffect } from "react";
 import { PatientsContext } from "../contexts/PatientsContext";
 import { AuthContext } from "../contexts/AuthContext";
 import {
   Box, Tab, Tabs, Paper, Typography, AppBar,
   Toolbar, Avatar, Menu, MenuItem, IconButton,
-  Badge, Divider
+  Badge, Divider, CircularProgress, Button
 } from "@mui/material";
 import PatientForm from "../components/PatientForm";
 import Calendar from "../components/Calendar";
@@ -26,6 +26,7 @@ import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
 import InventoryIcon from '@mui/icons-material/Inventory';
 import SettingsIcon from '@mui/icons-material/Settings';
 import MedicalServicesIcon from '@mui/icons-material/MedicalServices';
+import EventNoteIcon from '@mui/icons-material/EventNote';
 
 function TabPanel(props) {
   const { children, value, index, ...other } = props;
@@ -47,13 +48,33 @@ const MainTabs = () => {
   const [value, setValue] = useState(0);
   const [anchorEl, setAnchorEl] = useState(null);
   const { user, logout, clinicName, hasPermission } = useContext(AuthContext);
-  const { getPatientsByStatus } = useContext(PatientsContext);
+  const { getPatientsByStatus, loading } = useContext(PatientsContext);
+  const [patientsByStatus, setPatientsByStatus] = useState({
+    aguardando: [],
+    em_procedimento: []
+  });
+
+  useEffect(() => {
+    if (getPatientsByStatus) {
+      try {
+        const status = getPatientsByStatus();
+        setPatientsByStatus({
+          aguardando: status.aguardando || [],
+          em_procedimento: status.em_procedimento || []
+        });
+      } catch (error) {
+        console.error('Erro ao carregar status:', error);
+      }
+    }
+  }, [getPatientsByStatus]);
 
   if (!user) {
     return <AuthScreen />;
   }
 
-  const patientsByStatus = getPatientsByStatus();
+  console.log('Usuário logado:', user);
+  console.log('Cargo do usuário:', user.cargo);
+  console.log('Tipo do cargo:', typeof user.cargo);
 
   const handleMenu = (event) => {
     setAnchorEl(event.currentTarget);
@@ -68,102 +89,110 @@ const MainTabs = () => {
     handleClose();
   };
 
+  const getRoleLabel = () => {
+    const roles = {
+      proprietario: '👑 Proprietário',
+      gestor: '👑 Gestor',
+      dentista: '🦷 Dentista',
+      atendente: '📋 Atendente',
+      financeiro: '💰 Financeiro'
+    };
+    return roles[user.cargo] || user.cargo;
+  };
+
+  // Função para mudar de aba programaticamente
+  const changeTab = (tabIndex) => {
+    setValue(tabIndex);
+  };
+
   // Definição de abas por perfil
   const atendenteTabs = [
-    { 
-      label: "Agendamentos", 
-      icon: <CalendarMonthIcon />,
-      content: <AppointmentManagement />
-    },
-    { 
-      label: "Cadastro Paciente", 
-      icon: <PersonAddIcon />,
-      content: <PatientForm onChangeTab={setValue} />
-    },
-    { 
-      label: "Calendário", 
-      icon: <CalendarMonthIcon />,
-      content: <Calendar />
-    }
+    { label: "Agendamentos", icon: <EventNoteIcon />, component: <AppointmentManagement /> },
+    { label: "Cadastro", icon: <PersonAddIcon />, component: <PatientForm onChangeTab={changeTab} /> },
+    { label: "Calendário", icon: <CalendarMonthIcon />, component: <Calendar /> },
+    { label: "Fluxo", icon: <PeopleIcon />, component: <PatientFlowPanel /> }
   ];
 
   const dentistaTabs = [
-    { 
-      label: "Minha Agenda", 
-      icon: <CalendarMonthIcon />,
-      content: <DentistSchedulePanel />
-    }
+    { label: "Minha Agenda", icon: <CalendarMonthIcon />, component: <DentistSchedulePanel /> },
+    { label: "Meus Pacientes", icon: <PeopleIcon />, component: <PatientFlowPanel /> }
   ];
 
   const financeiroTabs = [
-    { 
-      label: "Caixa", 
-      icon: <AttachMoneyIcon />,
-      content: <Cashier />
-    }
+    { label: "Caixa", icon: <AttachMoneyIcon />, component: <Cashier /> },
+    { label: "Dashboard", icon: <DashboardIcon />, component: <Home /> }
   ];
 
   const gestorTabs = [
-    { 
-      label: "Dashboard", 
-      icon: <DashboardIcon />,
-      content: <Home />
-    },
-    { 
-      label: "Fluxo de Pacientes", 
-      icon: <PeopleIcon />,
-      content: <PatientFlowPanel />
-    },
-    { 
-      label: "Agendamentos", 
-      icon: <CalendarMonthIcon />,
-      content: <AppointmentManagement />
-    },
-    { 
-      label: "Cadastro Paciente", 
-      icon: <PersonAddIcon />,
-      content: <PatientForm onChangeTab={setValue} />
-    },
-    { 
-      label: "Calendário", 
-      icon: <CalendarMonthIcon />,
-      content: <Calendar />
-    },
-    { 
-      label: "Materiais", 
-      icon: <InventoryIcon />,
-      content: <MaterialsManagement />
-    },
-    { 
-      label: "Caixa", 
-      icon: <AttachMoneyIcon />,
-      content: <Cashier />
-    },
-    { 
-      label: "Configurações", 
-      icon: <SettingsIcon />,
-      content: <Settings />
-    }
+    { label: "Dashboard", icon: <DashboardIcon />, component: <Home /> },
+    { label: "Fluxo", icon: <PeopleIcon />, component: <PatientFlowPanel /> },
+    { label: "Agendamentos", icon: <EventNoteIcon />, component: <AppointmentManagement /> },
+    { label: "Cadastro", icon: <PersonAddIcon />, component: <PatientForm onChangeTab={changeTab} /> },
+    { label: "Calendário", icon: <CalendarMonthIcon />, component: <Calendar /> },
+    { label: "Materiais", icon: <InventoryIcon />, component: <MaterialsManagement /> },
+    { label: "Caixa", icon: <AttachMoneyIcon />, component: <Cashier /> },
+    { label: "Configurações", icon: <SettingsIcon />, component: <Settings /> }
   ];
 
-  // Selecionar abas baseado no cargo
+  // Função para normalizar o cargo (remover acentos e tratar variações)
+  const normalizeCargo = (cargo) => {
+    if (!cargo) return '';
+    
+    const cargoStr = String(cargo).toLowerCase().trim();
+    
+    // Mapeamento de variações possíveis
+    const mapaCargos = {
+      'proprietario': 'proprietario',
+      'proprietário': 'proprietario',
+      'proprietaria': 'proprietario',
+      'proprietária': 'proprietario',
+      'gestor': 'gestor',
+      'gestora': 'gestor',
+      'dentista': 'dentista',
+      'atendente': 'atendente',
+      'financeiro': 'financeiro',
+      'financeira': 'financeiro'
+    };
+    
+    return mapaCargos[cargoStr] || cargoStr;
+  };
+
+  // Selecionar abas baseado no cargo normalizado
   const getTabsByRole = () => {
-    switch(user.cargo) {
+    const cargoNormalizado = normalizeCargo(user.cargo);
+    
+    console.log('Cargo original:', user.cargo);
+    console.log('Cargo normalizado:', cargoNormalizado);
+    
+    switch (cargoNormalizado) {
       case 'atendente':
+        console.log('Usando abas de atendente');
         return atendenteTabs;
       case 'dentista':
+        console.log('Usando abas de dentista');
         return dentistaTabs;
       case 'financeiro':
+        console.log('Usando abas de financeiro');
         return financeiroTabs;
       case 'gestor':
       case 'proprietario':
+        console.log('Usando abas de gestor/proprietário');
         return gestorTabs;
       default:
-        return [];
+        console.log('Cargo não reconhecido, usando gestor como fallback');
+        return gestorTabs;
     }
   };
 
   const tabs = getTabsByRole();
+
+  if (loading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
 
   return (
     <Box sx={{ flexGrow: 1 }}>
@@ -171,14 +200,11 @@ const MainTabs = () => {
         <Toolbar>
           <MedicalServicesIcon sx={{ mr: 2 }} />
           <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
-            {clinicName} - {user.cargo === 'atendente' ? 'Atendente' :
-                           user.cargo === 'dentista' ? 'Dentista' :
-                           user.cargo === 'financeiro' ? 'Financeiro' :
-                           user.cargo === 'gestor' ? 'Gestor' : 'Proprietário'}
+            {clinicName || 'Clínica'} - {getRoleLabel()}
           </Typography>
           
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
-            {user.cargo === 'gestor' && (
+            {(user.cargo === 'gestor' || user.cargo === 'proprietario') && (
               <Box sx={{ display: 'flex', gap: 2, mr: 3 }}>
                 <Badge badgeContent={patientsByStatus.aguardando.length} color="warning">
                   <Typography variant="body2">Aguardando</Typography>
@@ -195,33 +221,21 @@ const MainTabs = () => {
             
             <IconButton
               size="large"
-              aria-label="account"
-              aria-controls="menu-appbar"
-              aria-haspopup="true"
               onClick={handleMenu}
               color="inherit"
             >
-              <AccountCircleIcon />
+              <Avatar sx={{ width: 32, height: 32, bgcolor: 'secondary.main' }}>
+                {user.nome?.charAt(0).toUpperCase()}
+              </Avatar>
             </IconButton>
+            
             <Menu
-              id="menu-appbar"
               anchorEl={anchorEl}
-              anchorOrigin={{
-                vertical: 'top',
-                horizontal: 'right',
-              }}
-              keepMounted
-              transformOrigin={{
-                vertical: 'top',
-                horizontal: 'right',
-              }}
               open={Boolean(anchorEl)}
               onClose={handleClose}
             >
               <MenuItem disabled>
-                <Typography variant="body2">
-                  {user.email}
-                </Typography>
+                <Typography variant="body2">{user.email}</Typography>
               </MenuItem>
               <Divider />
               <MenuItem onClick={handleLogout}>
@@ -254,7 +268,7 @@ const MainTabs = () => {
 
       {tabs.map((tab, index) => (
         <TabPanel key={index} value={value} index={index}>
-          {tab.content}
+          {tab.component}
         </TabPanel>
       ))}
     </Box>

@@ -41,7 +41,7 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import TodayIcon from '@mui/icons-material/Today';
 
-// Função segura para formatar data sem usar date-fns
+// Função segura para formatar data
 const formatTime = (dateValue) => {
   if (!dateValue) return '--:--';
   
@@ -63,6 +63,27 @@ const formatTime = (dateValue) => {
     });
   } catch (e) {
     return '--:--';
+  }
+};
+
+const formatDate = (dateValue) => {
+  if (!dateValue) return 'Data não informada';
+  
+  try {
+    let date;
+    if (typeof dateValue === 'string') {
+      date = new Date(dateValue);
+    } else if (dateValue instanceof Date) {
+      date = dateValue;
+    } else {
+      return 'Data inválida';
+    }
+    
+    if (isNaN(date.getTime())) return 'Data inválida';
+    
+    return format(date, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR });
+  } catch (e) {
+    return 'Data inválida';
   }
 };
 
@@ -108,8 +129,27 @@ const AppointmentManagement = () => {
   useEffect(() => {
     if (patients && patients.length > 0) {
       try {
+        console.log('Todos os pacientes:', patients);
+        
+        // Filtrar apenas pacientes com status 'agendado' E pagos
         const filtered = patients.filter(p => {
-          if (!p || p.status !== 'agendado') return false;
+          // Verificar se existe
+          if (!p) return false;
+          
+          // Log para debug
+          console.log('Verificando paciente:', p.id, 'status:', p.status, 'pago:', p.pago);
+          
+          // Só mostrar se estiver agendado E pago
+          const isAgendado = p.status === 'agendado';
+          const isPago = p.pago === true;
+          
+          if (!isAgendado || !isPago) {
+            if (p.status === 'pendente_pagamento') {
+              console.log('Paciente aguardando pagamento:', p.name || p.nome);
+            }
+            return false;
+          }
+          
           if (!p.scheduleDate) return false;
           
           try {
@@ -133,12 +173,14 @@ const AppointmentManagement = () => {
           }
         });
         
+        console.log('Agendamentos pagos para hoje:', filtered.length);
         setAppointments(filtered);
       } catch (error) {
         console.error('Erro ao filtrar agendamentos:', error);
         setAppointments([]);
       }
     } else {
+      console.log('Nenhum paciente encontrado');
       setAppointments([]);
     }
   }, [patients, selectedDate]);
@@ -146,17 +188,20 @@ const AppointmentManagement = () => {
   const handleContact = (patient, method) => {
     if (!patient) return;
     
+    const phone = patient.phone || patient.telefone;
+    const email = patient.email;
+    
     const actions = {
-      phone: () => patient.phone && (window.location.href = `tel:${patient.phone}`),
-      whatsapp: () => patient.phone && window.open(`https://wa.me/${patient.phone.replace(/\D/g, '')}`, '_blank'),
-      email: () => patient.email && (window.location.href = `mailto:${patient.email}`),
+      phone: () => phone && (window.location.href = `tel:${phone}`),
+      whatsapp: () => phone && window.open(`https://wa.me/${phone.replace(/\D/g, '')}`, '_blank'),
+      email: () => email && (window.location.href = `mailto:${email}`),
     };
     
     try {
       actions[method]?.();
       setSnackbar({
         open: true,
-        message: `Contato iniciado com ${patient.name || 'paciente'}`,
+        message: `Contato iniciado com ${patient.name || patient.nome || 'paciente'}`,
         severity: 'info',
       });
     } catch (error) {
@@ -168,7 +213,7 @@ const AppointmentManagement = () => {
     if (!patient) return;
     setSnackbar({
       open: true,
-      message: `Consulta confirmada para ${patient.name || 'paciente'}`,
+      message: `Consulta confirmada para ${patient.name || patient.nome || 'paciente'}`,
       severity: 'success',
     });
   };
@@ -181,7 +226,7 @@ const AppointmentManagement = () => {
         setCancelReason('');
         setSnackbar({
           open: true,
-          message: `Agendamento cancelado para ${selectedPatient.name}`,
+          message: `Agendamento cancelado para ${selectedPatient.name || selectedPatient.nome}`,
           severity: 'warning',
         });
       } catch (error) {
@@ -203,10 +248,14 @@ const AppointmentManagement = () => {
   const filteredAppointments = appointments.filter(app => {
     if (!searchTerm) return true;
     const term = searchTerm.toLowerCase();
+    const nome = app.name || app.nome || '';
+    const phone = app.phone || app.telefone || '';
+    const email = app.email || '';
+    
     return (
-      (app.name && app.name.toLowerCase().includes(term)) ||
-      (app.phone && app.phone.includes(term)) ||
-      (app.email && app.email.toLowerCase().includes(term))
+      nome.toLowerCase().includes(term) ||
+      phone.includes(term) ||
+      email.toLowerCase().includes(term)
     );
   });
 
@@ -327,16 +376,17 @@ const AppointmentManagement = () => {
                     }}>
                       <Box sx={{ display: 'flex', gap: 3, alignItems: 'center' }}>
                         <PatientAvatar>
-                          {appointment.name ? appointment.name.charAt(0).toUpperCase() : '?'}
+                          {(appointment.name || appointment.nome) ? 
+                            (appointment.name || appointment.nome).charAt(0).toUpperCase() : '?'}
                         </PatientAvatar>
                         
                         <Box>
                           <Typography variant="h6" sx={{ fontWeight: 600, mb: 0.5 }}>
-                            {appointment.name || 'Nome não informado'}
+                            {appointment.name || appointment.nome || 'Nome não informado'}
                           </Typography>
                           <Stack direction="row" spacing={1} sx={{ mb: 1, flexWrap: 'wrap' }}>
                             <Chip
-                              label={appointment.procedureType || 'Procedimento'}
+                              label={appointment.procedureType || appointment.procedimento || 'Procedimento'}
                               size="small"
                               sx={{
                                 backgroundColor: '#F0F4F8',
@@ -351,12 +401,20 @@ const AppointmentManagement = () => {
                                 color: '#A65D5D',
                               }}
                             />
+                            <Chip
+                              label="Pago"
+                              size="small"
+                              sx={{
+                                backgroundColor: '#C5E0C5',
+                                color: '#4F7A4F',
+                              }}
+                            />
                           </Stack>
                           <Stack direction="row" spacing={2} sx={{ flexWrap: 'wrap' }}>
-                            {appointment.phone && (
+                            {(appointment.phone || appointment.telefone) && (
                               <Typography variant="body2" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                                 <PhoneIcon sx={{ fontSize: 16, color: '#A7C7E7' }} />
-                                {appointment.phone}
+                                {appointment.phone || appointment.telefone}
                               </Typography>
                             )}
                             {appointment.email && (
@@ -382,34 +440,34 @@ const AppointmentManagement = () => {
                         />
                         
                         <Box sx={{ display: 'flex', gap: 1 }}>
-                          {appointment.phone && (
-                            <Tooltip title="Ligar">
-                              <IconButton 
-                                size="small"
-                                onClick={() => handleContact(appointment, 'phone')}
-                                sx={{ 
-                                  bgcolor: '#F0F4F8',
-                                  '&:hover': { bgcolor: '#E0E8F0' }
-                                }}
-                              >
-                                <PhoneIcon sx={{ fontSize: 20, color: '#4A5568' }} />
-                              </IconButton>
-                            </Tooltip>
-                          )}
-                          
-                          {appointment.phone && (
-                            <Tooltip title="WhatsApp">
-                              <IconButton 
-                                size="small"
-                                onClick={() => handleContact(appointment, 'whatsapp')}
-                                sx={{ 
-                                  bgcolor: '#F0F4F8',
-                                  '&:hover': { bgcolor: '#E0E8F0' }
-                                }}
-                              >
-                                <WhatsAppIcon sx={{ fontSize: 20, color: '#25D366' }} />
-                              </IconButton>
-                            </Tooltip>
+                          {(appointment.phone || appointment.telefone) && (
+                            <>
+                              <Tooltip title="Ligar">
+                                <IconButton 
+                                  size="small"
+                                  onClick={() => handleContact(appointment, 'phone')}
+                                  sx={{ 
+                                    bgcolor: '#F0F4F8',
+                                    '&:hover': { bgcolor: '#E0E8F0' }
+                                  }}
+                                >
+                                  <PhoneIcon sx={{ fontSize: 20, color: '#4A5568' }} />
+                                </IconButton>
+                              </Tooltip>
+                              
+                              <Tooltip title="WhatsApp">
+                                <IconButton 
+                                  size="small"
+                                  onClick={() => handleContact(appointment, 'whatsapp')}
+                                  sx={{ 
+                                    bgcolor: '#F0F4F8',
+                                    '&:hover': { bgcolor: '#E0E8F0' }
+                                  }}
+                                >
+                                  <WhatsAppIcon sx={{ fontSize: 20, color: '#25D366' }} />
+                                </IconButton>
+                              </Tooltip>
+                            </>
                           )}
                           
                           {appointment.email && (
@@ -507,10 +565,10 @@ const AppointmentManagement = () => {
               }}>
                 <EventIcon sx={{ fontSize: 60, color: '#D0DCE8', mb: 2 }} />
                 <Typography variant="h6" gutterBottom sx={{ color: '#718096' }}>
-                  Nenhum agendamento para esta data
+                  Nenhum agendamento pago para esta data
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                  Selecione outra data ou crie um novo agendamento
+                  Selecione outra data ou aguarde novos pagamentos
                 </Typography>
               </Box>
             </Grid>
@@ -533,16 +591,14 @@ const AppointmentManagement = () => {
               <Box sx={{ mt: 2 }}>
                 <Box sx={{ mb: 3, p: 2, bgcolor: '#F9FAFB', borderRadius: 2 }}>
                   <Typography variant="body2" gutterBottom>
-                    <strong>Paciente:</strong> {selectedPatient.name}
+                    <strong>Paciente:</strong> {selectedPatient.name || selectedPatient.nome}
                   </Typography>
                   <Typography variant="body2" gutterBottom>
-                    <strong>Procedimento:</strong> {selectedPatient.procedureType}
+                    <strong>Procedimento:</strong> {selectedPatient.procedureType || selectedPatient.procedimento}
                   </Typography>
-                  {selectedPatient.scheduleDate && (
-                    <Typography variant="body2">
-                      <strong>Horário:</strong> {formatTime(selectedPatient.scheduleDate)}
-                    </Typography>
-                  )}
+                  <Typography variant="body2" gutterBottom>
+                    <strong>Data/Hora:</strong> {formatDate(selectedPatient.scheduleDate)}
+                  </Typography>
                 </Box>
                 
                 <TextField
@@ -599,10 +655,10 @@ const AppointmentManagement = () => {
               <Box sx={{ mt: 2 }}>
                 <Box sx={{ mb: 3, p: 2, bgcolor: '#F9FAFB', borderRadius: 2 }}>
                   <Typography variant="body2" gutterBottom>
-                    <strong>Paciente:</strong> {selectedPatient.name}
+                    <strong>Paciente:</strong> {selectedPatient.name || selectedPatient.nome}
                   </Typography>
                   <Typography variant="body2">
-                    <strong>Telefone:</strong> {selectedPatient.phone}
+                    <strong>Telefone:</strong> {selectedPatient.phone || selectedPatient.telefone}
                   </Typography>
                 </Box>
 
@@ -611,7 +667,7 @@ const AppointmentManagement = () => {
                     <TextField
                       fullWidth
                       label="Procedimento"
-                      value={selectedPatient.procedureType || ''}
+                      value={selectedPatient.procedureType || selectedPatient.procedimento || ''}
                       disabled
                     />
                   </Grid>
@@ -620,7 +676,7 @@ const AppointmentManagement = () => {
                       fullWidth
                       label="Valor Estimado"
                       type="number"
-                      defaultValue="150"
+                      defaultValue={selectedPatient.valor || 150}
                       InputProps={{
                         startAdornment: <Typography sx={{ mr: 1, color: '#718096' }}>R$</Typography>
                       }}
@@ -656,7 +712,7 @@ const AppointmentManagement = () => {
               onClick={() => {
                 setSnackbar({
                   open: true,
-                  message: `Orçamento criado para ${selectedPatient?.name}`,
+                  message: `Orçamento criado para ${selectedPatient?.name || selectedPatient?.nome}`,
                   severity: 'success'
                 });
                 setOpenBudgetDialog(false);

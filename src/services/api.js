@@ -1,16 +1,10 @@
-// services/api.js
 import axios from 'axios';
 
-// URL da API - backend na porta 3001
-// No Vite, use import.meta.env em vez de process.env
-const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
-
 const api = axios.create({
-  baseURL: baseURL,
-  timeout: 6000,
+  baseURL: 'http://localhost:3001/api',
+  timeout: 10000,
 });
 
-// Adicionar interceptor para incluir token automaticamente
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('token');
   if (token) {
@@ -19,22 +13,13 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Interceptor para tratamento de erros
 api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      // Token expirado ou inválido
       localStorage.removeItem('token');
       localStorage.removeItem('user');
-      localStorage.removeItem('clinicName');
       window.location.href = '/login';
-    }
-
-    if (error.code === 'ECONNABORTED') {
-      console.error('Timeout na requisição');
-    } else if (!error.response) {
-      console.error('Erro de rede - servidor não responde');
     }
     return Promise.reject(error);
   }

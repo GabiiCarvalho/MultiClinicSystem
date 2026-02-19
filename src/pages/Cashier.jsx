@@ -7,7 +7,7 @@ import {
   TableContainer, TableHead, TableRow, Chip,
   Dialog, DialogTitle, DialogContent, DialogActions,
   Divider, Alert, Grid, Card, CardContent, Avatar,
-  Badge, IconButton, MenuItem
+  Badge, IconButton, MenuItem, Snackbar
 } from "@mui/material";
 import EditIcon from '@mui/icons-material/Edit';
 import LocalPrintshopIcon from '@mui/icons-material/LocalPrintshop';
@@ -48,13 +48,13 @@ const Receipt = ({ patient, cart, paymentMethod, receivedValue, change, clinicNa
       }
     }}>
       <Typography variant="h6" align="center" sx={{ fontWeight: 'bold', mb: 1 }}>
-        {clinicName.toUpperCase()}
+        {clinicName?.toUpperCase() || 'CLÍNICA'}
       </Typography>
       <Divider sx={{ my: 1 }} />
 
       <Box sx={{ mb: 2 }}>
-        <Typography><strong>Paciente:</strong> {patient?.name || 'N/A'}</Typography>
-        <Typography><strong>Telefone:</strong> {patient?.phone || 'N/A'}</Typography>
+        <Typography><strong>Paciente:</strong> {patient?.name || patient?.nome || 'N/A'}</Typography>
+        <Typography><strong>Telefone:</strong> {patient?.phone || patient?.telefone || 'N/A'}</Typography>
         <Typography><strong>Data:</strong> {new Date().toLocaleString()}</Typography>
       </Box>
 
@@ -65,6 +65,7 @@ const Receipt = ({ patient, cart, paymentMethod, receivedValue, change, clinicNa
           <Box key={index} sx={{ mb: 1 }}>
             <Typography>
               {item.name} - R$ {item.price.toFixed(2)}
+              {item.dentist && <Typography variant="caption" display="block">Dentista: {item.dentist}</Typography>}
             </Typography>
           </Box>
         ))}
@@ -74,7 +75,10 @@ const Receipt = ({ patient, cart, paymentMethod, receivedValue, change, clinicNa
 
       <Box sx={{ mb: 2 }}>
         <Typography><strong>TOTAL:</strong> R$ {calculateTotal().toFixed(2)}</Typography>
-        <Typography><strong>Pagamento:</strong> {paymentMethod}</Typography>
+        <Typography><strong>Pagamento:</strong> {paymentMethod === 'dinheiro' ? 'Dinheiro' : 
+          paymentMethod === 'pix' ? 'PIX' : 
+          paymentMethod === 'cartao_debito' ? 'Cartão de Débito' : 
+          paymentMethod === 'cartao_credito' ? 'Cartão de Crédito' : paymentMethod}</Typography>
         {paymentMethod === 'dinheiro' && (
           <>
             <Typography><strong>Recebido:</strong> R$ {parseFloat(receivedValue).toFixed(2)}</Typography>
@@ -93,7 +97,7 @@ const Receipt = ({ patient, cart, paymentMethod, receivedValue, change, clinicNa
 
 const Cashier = () => {
   const { clinicName } = useContext(AuthContext);
-  const { patients } = useContext(PatientsContext);
+  const { patients, marcarComoPago } = useContext(PatientsContext);
   
   const [procedurePrices, setProcedurePrices] = useState({
     "Consulta Odontológica": 150,
@@ -144,43 +148,68 @@ const Cashier = () => {
   const [openEditDialog, setOpenEditDialog] = useState(false);
   const [openDeleteDialog, setOpenDeleteDialog] = useState(false);
   const [procedureToDelete, setProcedureToDelete] = useState(null);
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
 
+  // Mapear pacientes para o formato esperado
   const patientsList = patients.map(patient => ({
-    name: patient.name,
-    phone: patient.phone,
+    id: patient.id,
+    name: patient.name || patient.nome,
+    phone: patient.phone || patient.telefone,
     patient: patient
   }));
 
   const filteredPatients = patientsList.filter(patient =>
-    patient.name.toLowerCase().includes(searchInput.toLowerCase()) ||
-    patient.phone.includes(searchInput)
+    patient.name?.toLowerCase().includes(searchInput.toLowerCase()) ||
+    patient.phone?.includes(searchInput)
   );
 
+  // Verificar pagamentos pendentes ao carregar
   useEffect(() => {
-    const pendingSchedule = JSON.parse(localStorage.getItem('pendingServiceSchedule'));
-
-    if (pendingSchedule) {
-      setSearchInput(pendingSchedule.patient.phone);
-
-      const patient = patientsList.find(p => p.phone === pendingSchedule.patient.phone);
+    const pendingPayment = JSON.parse(localStorage.getItem('pendingPayment'));
+    
+    if (pendingPayment) {
+      console.log('Pagamento pendente encontrado:', pendingPayment);
+      
+      // Buscar o paciente
+      const patient = patientsList.find(p => 
+        p.phone === pendingPayment.patient?.phone || 
+        p.phone === pendingPayment.patient?.telefone ||
+        p.name === pendingPayment.patient?.name ||
+        p.name === pendingPayment.patient?.nome
+      );
+      
       if (patient) {
         setSelectedPatient(patient);
-
+        setSearchInput(patient.phone);
+        
+        // Adicionar ao carrinho
         addToCart({
-          name: pendingSchedule.procedureType,
-          price: procedurePrices[pendingSchedule.procedureType],
-          description: procedureDescriptions[pendingSchedule.procedureType],
-          dentist: pendingSchedule.dentist
+          name: pendingPayment.procedure || pendingPayment.procedureType,
+          price: pendingPayment.valor || procedurePrices[pendingPayment.procedure] || 150,
+          description: procedureDescriptions[pendingPayment.procedure] || pendingPayment.procedure,
+          dentist: pendingPayment.dentist
         });
+        
+        // Abrir diálogo de pagamento automaticamente
+        setTimeout(() => {
+          setOpenPaymentDialog(true);
+        }, 500);
+        
+        showSnackbar('Pagamento pendente carregado!', 'info');
       }
-
-      localStorage.removeItem('pendingServiceSchedule');
+      
+      // Limpar o pendingPayment após processar
+      localStorage.removeItem('pendingPayment');
     }
   }, [patientsList]);
 
+  const showSnackbar = (message, severity = 'success') => {
+    setSnackbar({ open: true, message, severity });
+  };
+
   const addToCart = (item) => {
     setCart([...cart, {
-      id: Date.now(),
+      id: Date.now() + Math.random(),
       name: item.name,
       price: item.price,
       description: item.description,
@@ -209,6 +238,8 @@ const Cashier = () => {
         description: '',
         price: 0
       });
+      
+      showSnackbar('Procedimento adicionado com sucesso!');
     }
   };
 
@@ -251,6 +282,7 @@ const Cashier = () => {
 
       setOpenEditDialog(false);
       setEditingProcedure(null);
+      showSnackbar('Procedimento atualizado com sucesso!');
     }
   };
 
@@ -267,6 +299,7 @@ const Cashier = () => {
     setProcedureDescriptions(newDescriptions);
     setOpenDeleteDialog(false);
     setProcedureToDelete(null);
+    showSnackbar('Procedimento removido com sucesso!');
   };
 
   const calculateTotal = () => {
@@ -294,7 +327,32 @@ const Cashier = () => {
   };
 
   const handlePayment = async () => {
+    if (!selectedPatient || cart.length === 0) {
+      showSnackbar('Selecione um paciente e adicione itens ao carrinho', 'warning');
+      return;
+    }
+    
     setPaymentSuccess(true);
+    
+    // Marcar como pago no contexto
+    if (selectedPatient?.id && marcarComoPago) {
+      marcarComoPago(selectedPatient.id);
+    }
+    
+    // Salvar no localStorage que o pagamento foi concluído
+    const paidAppointments = JSON.parse(localStorage.getItem('paidAppointments') || '[]');
+    paidAppointments.push({
+      patientId: selectedPatient.id,
+      patientName: selectedPatient.name,
+      patientPhone: selectedPatient.phone,
+      procedure: cart.map(c => c.name).join(', '),
+      date: new Date(),
+      total: calculateTotal(),
+      paymentMethod: paymentMethod
+    });
+    localStorage.setItem('paidAppointments', JSON.stringify(paidAppointments));
+    
+    showSnackbar('Pagamento realizado com sucesso!', 'success');
 
     setTimeout(() => {
       window.print();
@@ -305,15 +363,24 @@ const Cashier = () => {
       setPaymentSuccess(false);
       setCart([]);
       setReceivedValue("");
+      setSelectedPatient(null);
+      setSearchInput("");
+      setDiscountPercentage(0);
+      setApplyDiscount(false);
     }, 2000);
   };
 
   const printReceipt = () => {
+    if (!selectedPatient || cart.length === 0) {
+      showSnackbar('Selecione um paciente e adicione itens ao carrinho', 'warning');
+      return;
+    }
+    
     const printWindow = window.open('', '_blank');
     printWindow.document.write(`
       <html>
         <head>
-          <title>Recibo ${clinicName}</title>
+          <title>Recibo ${clinicName || 'Clínica'}</title>
           <style>
             body {
               font-family: Arial, sans-serif;
@@ -342,7 +409,7 @@ const Cashier = () => {
           </style>
         </head>
         <body>
-          <div class="receipt-header">${clinicName.toUpperCase()}</div>
+          <div class="receipt-header">${(clinicName || 'CLÍNICA').toUpperCase()}</div>
           <div><strong>Paciente:</strong> ${selectedPatient?.name || 'N/A'}</div>
           <div><strong>Telefone:</strong> ${selectedPatient?.phone || 'N/A'}</div>
           <div><strong>Data:</strong> ${new Date().toLocaleString()}</div>
@@ -355,9 +422,12 @@ const Cashier = () => {
           `).join('')}
           <hr>
           <div class="receipt-total">TOTAL: R$ ${calculateTotal().toFixed(2)}</div>
-          <div><strong>Pagamento:</strong> ${paymentMethod}</div>
+          <div><strong>Pagamento:</strong> ${paymentMethod === 'dinheiro' ? 'Dinheiro' : 
+            paymentMethod === 'pix' ? 'PIX' : 
+            paymentMethod === 'cartao_debito' ? 'Cartão de Débito' : 
+            paymentMethod === 'cartao_credito' ? 'Cartão de Crédito' : paymentMethod}</div>
           ${paymentMethod === 'dinheiro' ? `
-            <div><strong>Recebido:</strong> R$ ${parseFloat(receivedValue).toFixed(2)}</div>
+            <div><strong>Recebido:</strong> R$ ${parseFloat(receivedValue || calculateTotal()).toFixed(2)}</div>
             <div><strong>Troco:</strong> R$ ${calculateChange().toFixed(2)}</div>
           ` : ''}
           <div class="receipt-footer">Obrigado pela preferência!</div>
@@ -397,7 +467,7 @@ const Cashier = () => {
           fontWeight: 'bold',
           color: themeColors.primary
         }}>
-          Sistema de Caixa - {clinicName}
+          Sistema de Caixa - {clinicName || 'Clínica'}
         </Typography>
       </Box>
 
@@ -445,7 +515,7 @@ const Cashier = () => {
                 <li {...props}>
                   <Box sx={{ display: 'flex', alignItems: 'center' }}>
                     <Avatar sx={{ bgcolor: themeColors.primary, mr: 2 }}>
-                      {option.name.charAt(0)}
+                      {option.name?.charAt(0) || '?'}
                     </Avatar>
                     <Box>
                       <Typography>{option.name}</Typography>
@@ -679,6 +749,47 @@ const Cashier = () => {
           </DialogActions>
         </Dialog>
 
+        {/* Diálogo de Edição */}
+        <Dialog open={openEditDialog} onClose={() => setOpenEditDialog(false)} maxWidth="sm" fullWidth>
+          <DialogTitle>Editar Procedimento</DialogTitle>
+          <DialogContent>
+            {editingProcedure && (
+              <Box sx={{ mt: 2 }}>
+                <TextField
+                  label="Nome do Procedimento"
+                  fullWidth
+                  value={editingProcedure.name}
+                  onChange={(e) => setEditingProcedure({ ...editingProcedure, name: e.target.value })}
+                  sx={{ mb: 2 }}
+                />
+                <TextField
+                  label="Descrição"
+                  fullWidth
+                  multiline
+                  rows={2}
+                  value={editingProcedure.description}
+                  onChange={(e) => setEditingProcedure({ ...editingProcedure, description: e.target.value })}
+                  sx={{ mb: 2 }}
+                />
+                <TextField
+                  label="Preço"
+                  type="number"
+                  fullWidth
+                  value={editingProcedure.price}
+                  onChange={(e) => setEditingProcedure({ ...editingProcedure, price: parseFloat(e.target.value) || 0 })}
+                  InputProps={{
+                    startAdornment: <Typography sx={{ mr: 1 }}>R$</Typography>
+                  }}
+                />
+              </Box>
+            )}
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setOpenEditDialog(false)}>Cancelar</Button>
+            <Button onClick={handleSaveEditedProcedure} variant="contained">Salvar</Button>
+          </DialogActions>
+        </Dialog>
+
         {/* Seção do Carrinho */}
         <Grid item xs={12} md={4}>
           <Paper sx={{
@@ -883,7 +994,7 @@ const Cashier = () => {
                 patient={selectedPatient}
                 cart={cart}
                 paymentMethod={paymentMethod}
-                receivedValue={receivedValue}
+                receivedValue={receivedValue || calculateTotal()}
                 change={calculateChange()}
                 clinicName={clinicName}
               />
@@ -1027,8 +1138,8 @@ const Cashier = () => {
                   >
                     <MenuItem value="dinheiro">Dinheiro</MenuItem>
                     <MenuItem value="pix">PIX</MenuItem>
-                    <MenuItem value="cartao-debito">Cartão de Débito</MenuItem>
-                    <MenuItem value="cartao-credito">Cartão de Crédito</MenuItem>
+                    <MenuItem value="cartao_debito">Cartão de Débito</MenuItem>
+                    <MenuItem value="cartao_credito">Cartão de Crédito</MenuItem>
                   </TextField>
 
                   {paymentMethod === "dinheiro" && (
@@ -1118,6 +1229,7 @@ const Cashier = () => {
                 }
               }}
               disabled={
+                cart.length === 0 ||
                 (paymentMethod === "dinheiro" &&
                   (!receivedValue || parseFloat(receivedValue) < calculateTotal()))
               }
@@ -1127,6 +1239,17 @@ const Cashier = () => {
           </DialogActions>
         )}
       </Dialog>
+
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={4000}
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert severity={snackbar.severity} sx={{ borderRadius: 2 }}>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };

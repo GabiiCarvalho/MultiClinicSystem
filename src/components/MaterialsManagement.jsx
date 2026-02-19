@@ -1,251 +1,641 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Box, Typography, Paper, Grid, Card, CardContent,
   TextField, Button, IconButton, Dialog,
   DialogTitle, DialogContent, DialogActions,
   Table, TableBody, TableCell, TableContainer,
-  TableHead, TableRow, Chip, LinearProgress,
-  Alert, Snackbar
+  TableHead, TableRow, Chip, Alert, Snackbar,
+  MenuItem, InputAdornment, Tooltip
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import WarningIcon from '@mui/icons-material/Warning';
+import SearchIcon from '@mui/icons-material/Search';
+import HistoryIcon from '@mui/icons-material/History';
+import api from '../services/api';
 
 const MaterialsManagement = () => {
-  const [materials, setMaterials] = useState([
-    { id: 1, name: 'Anestésico', quantity: 50, unit: 'ml', minQuantity: 20, price: 45.00 },
-    { id: 2, name: 'Luvas', quantity: 200, unit: 'un', minQuantity: 50, price: 0.50 },
-    { id: 3, name: 'Máscaras', quantity: 150, unit: 'un', minQuantity: 50, price: 1.20 },
-    { id: 4, name: 'Seringas', quantity: 30, unit: 'un', minQuantity: 40, price: 2.50 },
-    { id: 5, name: 'Algodão', quantity: 10, unit: 'pacote', minQuantity: 5, price: 8.00 },
-  ]);
+  const [materials, setMaterials] = useState([]);
+  const [loading, setLoading] = useState(false);
   const [openDialog, setOpenDialog] = useState(false);
+  const [openHistoryDialog, setOpenHistoryDialog] = useState(false);
   const [editingMaterial, setEditingMaterial] = useState(null);
+  const [selectedMaterial, setSelectedMaterial] = useState(null);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
-  const [newMaterial, setNewMaterial] = useState({
-    name: '',
-    quantity: 0,
-    unit: 'un',
-    minQuantity: 0,
-    price: 0
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterCategory, setFilterCategory] = useState('');
+  const [filterLowStock, setFilterLowStock] = useState(false);
+  const [stats, setStats] = useState({
+    total_materiais: 0,
+    valor_total_estoque: 0,
+    materiais_estoque_baixo: 0,
+    materiais_esgotados: 0
   });
 
-  const handleAddMaterial = () => {
-    if (editingMaterial) {
-      setMaterials(materials.map(m => 
-        m.id === editingMaterial.id ? { ...editingMaterial } : m
-      ));
-      setSnackbar({ open: true, message: 'Material atualizado com sucesso', severity: 'success' });
-    } else {
-      setMaterials([...materials, { ...newMaterial, id: Date.now() }]);
-      setSnackbar({ open: true, message: 'Material adicionado com sucesso', severity: 'success' });
+  const [newMaterial, setNewMaterial] = useState({
+    nome: '',
+    descricao: '',
+    quantidade: 0,
+    unidade: 'un',
+    quantidade_minima: 10,
+    preco_unitario: 0,
+    fornecedor: '',
+    categoria: 'consumivel',
+    localizacao: '',
+    data_validade: '',
+    lote: '',
+    observacoes: ''
+  });
+
+  const [movimentacao, setMovimentacao] = useState({
+    tipo: 'entrada',
+    quantidade: 0,
+    motivo: '',
+    observacoes: ''
+  });
+
+  const categories = [
+    { value: 'consumivel', label: 'Consumível' },
+    { value: 'instrumental', label: 'Instrumental' },
+    { value: 'medicamento', label: 'Medicamento' },
+    { value: 'equipamento', label: 'Equipamento' }
+  ];
+
+  const unidades = [
+    { value: 'un', label: 'Unidade' },
+    { value: 'cx', label: 'Caixa' },
+    { value: 'pacote', label: 'Pacote' },
+    { value: 'ml', label: 'Mililitro' },
+    { value: 'g', label: 'Grama' }
+  ];
+
+  useEffect(() => {
+    fetchMaterials();
+    fetchStats();
+  }, []);
+
+  const fetchMaterials = async () => {
+    setLoading(true);
+    try {
+      let url = '/materiais?';
+      if (searchTerm) url += `search=${searchTerm}&`;
+      if (filterCategory) url += `categoria=${filterCategory}&`;
+      if (filterLowStock) url += `estoque_baixo=true&`;
+      
+      const response = await api.get(url);
+      setMaterials(response.data.materiais || []);
+    } catch (error) {
+      console.error('Erro ao carregar materiais:', error);
+      showSnackbar('Erro ao carregar materiais', 'error');
+    } finally {
+      setLoading(false);
     }
-    handleCloseDialog();
   };
 
-  const handleDeleteMaterial = (id) => {
-    setMaterials(materials.filter(m => m.id !== id));
-    setSnackbar({ open: true, message: 'Material removido com sucesso', severity: 'success' });
+  const fetchStats = async () => {
+    try {
+      const response = await api.get('/materiais/estatisticas');
+      setStats(response.data);
+    } catch (error) {
+      console.error('Erro ao carregar estatísticas:', error);
+    }
+  };
+
+  const showSnackbar = (message, severity = 'success') => {
+    setSnackbar({ open: true, message, severity });
+  };
+
+  const handleOpenDialog = (material = null) => {
+    if (material) {
+      setEditingMaterial(material);
+      setNewMaterial({
+        nome: material.nome || '',
+        descricao: material.descricao || '',
+        quantidade: material.quantidade || 0,
+        unidade: material.unidade || 'un',
+        quantidade_minima: material.quantidade_minima || 10,
+        preco_unitario: material.preco_unitario || 0,
+        fornecedor: material.fornecedor || '',
+        categoria: material.categoria || 'consumivel',
+        localizacao: material.localizacao || '',
+        data_validade: material.data_validade || '',
+        lote: material.lote || '',
+        observacoes: material.observacoes || ''
+      });
+    } else {
+      setEditingMaterial(null);
+      setNewMaterial({
+        nome: '',
+        descricao: '',
+        quantidade: 0,
+        unidade: 'un',
+        quantidade_minima: 10,
+        preco_unitario: 0,
+        fornecedor: '',
+        categoria: 'consumivel',
+        localizacao: '',
+        data_validade: '',
+        lote: '',
+        observacoes: ''
+      });
+    }
+    setOpenDialog(true);
+  };
+
+  const handleOpenHistory = (material) => {
+    setSelectedMaterial(material);
+    setOpenHistoryDialog(true);
   };
 
   const handleCloseDialog = () => {
     setOpenDialog(false);
     setEditingMaterial(null);
-    setNewMaterial({ name: '', quantity: 0, unit: 'un', minQuantity: 0, price: 0 });
   };
 
-  const getStockStatus = (material) => {
-    if (material.quantity <= 0) return { color: 'error', label: 'Esgotado' };
-    if (material.quantity <= material.minQuantity) return { color: 'warning', label: 'Baixo' };
-    return { color: 'success', label: 'Normal' };
+  const handleCloseHistory = () => {
+    setOpenHistoryDialog(false);
+    setSelectedMaterial(null);
+    setMovimentacao({
+      tipo: 'entrada',
+      quantidade: 0,
+      motivo: '',
+      observacoes: ''
+    });
+  };
+
+  const handleSaveMaterial = async () => {
+    try {
+      if (editingMaterial) {
+        await api.put(`/materiais/${editingMaterial.id}`, newMaterial);
+        showSnackbar('Material atualizado com sucesso');
+      } else {
+        await api.post('/materiais', newMaterial);
+        showSnackbar('Material adicionado com sucesso');
+      }
+      fetchMaterials();
+      fetchStats();
+      handleCloseDialog();
+    } catch (error) {
+      console.error('Erro ao salvar material:', error);
+      showSnackbar('Erro ao salvar material', 'error');
+    }
+  };
+
+  const handleDeleteMaterial = async (id) => {
+    if (window.confirm('Tem certeza que deseja excluir este material?')) {
+      try {
+        await api.delete(`/materiais/${id}`);
+        fetchMaterials();
+        fetchStats();
+        showSnackbar('Material removido com sucesso');
+      } catch (error) {
+        console.error('Erro ao excluir material:', error);
+        showSnackbar('Erro ao excluir material', 'error');
+      }
+    }
+  };
+
+  const handleMovimentacao = async () => {
+    if (!selectedMaterial || movimentacao.quantidade <= 0) return;
+
+    try {
+      await api.post(`/materiais/${selectedMaterial.id}/movimentacoes`, movimentacao);
+      showSnackbar('Movimentação registrada com sucesso');
+      fetchMaterials();
+      fetchStats();
+      handleCloseHistory();
+    } catch (error) {
+      console.error('Erro ao registrar movimentação:', error);
+      showSnackbar('Erro ao registrar movimentação', 'error');
+    }
+  };
+
+  const getStockStatusColor = (material) => {
+    if (material.quantidade <= 0) return 'error';
+    if (material.quantidade <= material.quantidade_minima) return 'warning';
+    return 'success';
+  };
+
+  const getStockStatusLabel = (material) => {
+    if (material.quantidade <= 0) return 'Esgotado';
+    if (material.quantidade <= material.quantidade_minima) return 'Baixo';
+    return 'Normal';
   };
 
   return (
     <Box sx={{ p: 3 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h4" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
-          Gestão de Materiais
-        </Typography>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={() => setOpenDialog(true)}
-        >
-          Adicionar Material
-        </Button>
-      </Box>
+      <Typography variant="h4" gutterBottom sx={{ fontWeight: 600, color: '#4A5568', mb: 3 }}>
+        📦 Gestão de Materiais
+      </Typography>
 
       <Grid container spacing={3} sx={{ mb: 4 }}>
-        <Grid item xs={12} md={3}>
+        <Grid item xs={12} sm={6} md={3}>
           <Card>
             <CardContent>
               <Typography color="text.secondary" gutterBottom>
                 Total de Itens
               </Typography>
               <Typography variant="h4">
-                {materials.length}
+                {stats.total_materiais}
               </Typography>
             </CardContent>
           </Card>
         </Grid>
-        <Grid item xs={12} md={3}>
+        <Grid item xs={12} sm={6} md={3}>
           <Card>
             <CardContent>
               <Typography color="text.secondary" gutterBottom>
-                Valor Total em Estoque
+                Valor em Estoque
               </Typography>
               <Typography variant="h4">
-                R$ {materials.reduce((sum, m) => sum + (m.quantity * m.price), 0).toFixed(2)}
+                R$ {stats.valor_total_estoque?.toFixed(2)}
               </Typography>
             </CardContent>
           </Card>
         </Grid>
-        <Grid item xs={12} md={3}>
-          <Card>
+        <Grid item xs={12} sm={6} md={3}>
+          <Card sx={{ bgcolor: '#FFF3CD' }}>
             <CardContent>
-              <Typography color="text.secondary" gutterBottom>
-                Itens com Estoque Baixo
+              <Typography color="warning.dark" gutterBottom>
+                Estoque Baixo
               </Typography>
-              <Typography variant="h4" color="warning.main">
-                {materials.filter(m => m.quantity <= m.minQuantity && m.quantity > 0).length}
+              <Typography variant="h4" color="warning.dark">
+                {stats.materiais_estoque_baixo}
               </Typography>
             </CardContent>
           </Card>
         </Grid>
-        <Grid item xs={12} md={3}>
-          <Card>
+        <Grid item xs={12} sm={6} md={3}>
+          <Card sx={{ bgcolor: '#FFE0E0' }}>
             <CardContent>
-              <Typography color="text.secondary" gutterBottom>
-                Itens Esgotados
+              <Typography color="error" gutterBottom>
+                Esgotados
               </Typography>
-              <Typography variant="h4" color="error.main">
-                {materials.filter(m => m.quantity <= 0).length}
+              <Typography variant="h4" color="error">
+                {stats.materiais_esgotados}
               </Typography>
             </CardContent>
           </Card>
         </Grid>
       </Grid>
 
-      <TableContainer component={Paper}>
-        <Table>
-          <TableHead>
-            <TableRow>
-              <TableCell>Material</TableCell>
-              <TableCell>Quantidade</TableCell>
-              <TableCell>Estoque Mínimo</TableCell>
-              <TableCell>Preço Unitário</TableCell>
-              <TableCell>Status</TableCell>
-              <TableCell>Ações</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {materials.map((material) => {
-              const stockStatus = getStockStatus(material);
-              return (
-                <TableRow key={material.id}>
-                  <TableCell>{material.name}</TableCell>
-                  <TableCell>{material.quantity} {material.unit}</TableCell>
-                  <TableCell>{material.minQuantity} {material.unit}</TableCell>
-                  <TableCell>R$ {material.price.toFixed(2)}</TableCell>
+      <Paper sx={{ p: 3, mb: 3 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+          <Box sx={{ display: 'flex', gap: 2, flex: 1 }}>
+            <TextField
+              size="small"
+              placeholder="Buscar materiais..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon />
+                  </InputAdornment>
+                )
+              }}
+              sx={{ width: 300 }}
+            />
+            <TextField
+              select
+              size="small"
+              label="Categoria"
+              value={filterCategory}
+              onChange={(e) => setFilterCategory(e.target.value)}
+              sx={{ width: 200 }}
+            >
+              <MenuItem value="">Todas</MenuItem>
+              {categories.map(cat => (
+                <MenuItem key={cat.value} value={cat.value}>{cat.label}</MenuItem>
+              ))}
+            </TextField>
+            <Button
+              variant={filterLowStock ? "contained" : "outlined"}
+              onClick={() => setFilterLowStock(!filterLowStock)}
+              color="warning"
+            >
+              Estoque Baixo
+            </Button>
+            <Button variant="outlined" onClick={fetchMaterials}>
+              Aplicar Filtros
+            </Button>
+          </Box>
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={() => handleOpenDialog()}
+          >
+            Novo Material
+          </Button>
+        </Box>
+
+        <TableContainer>
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableCell>Material</TableCell>
+                <TableCell>Categoria</TableCell>
+                <TableCell align="right">Quantidade</TableCell>
+                <TableCell align="right">Mínimo</TableCell>
+                <TableCell align="right">Preço Unit.</TableCell>
+                <TableCell align="right">Valor Total</TableCell>
+                <TableCell>Status</TableCell>
+                <TableCell align="center">Ações</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {materials.map((material) => (
+                <TableRow key={material.id} hover>
+                  <TableCell>
+                    <Typography variant="body2" fontWeight="bold">
+                      {material.nome}
+                    </Typography>
+                    {material.descricao && (
+                      <Typography variant="caption" color="text.secondary">
+                        {material.descricao}
+                      </Typography>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {categories.find(c => c.value === material.categoria)?.label || material.categoria}
+                  </TableCell>
+                  <TableCell align="right">
+                    {material.quantidade} {material.unidade}
+                  </TableCell>
+                  <TableCell align="right">
+                    {material.quantidade_minima} {material.unidade}
+                  </TableCell>
+                  <TableCell align="right">
+                    R$ {parseFloat(material.preco_unitario).toFixed(2)}
+                  </TableCell>
+                  <TableCell align="right">
+                    R$ {material.valor_total?.toFixed(2)}
+                  </TableCell>
                   <TableCell>
                     <Chip
-                      label={stockStatus.label}
-                      color={stockStatus.color}
+                      label={getStockStatusLabel(material)}
+                      color={getStockStatusColor(material)}
                       size="small"
-                      icon={stockStatus.color !== 'success' ? <WarningIcon /> : undefined}
+                      icon={material.estoque_status !== 'normal' ? <WarningIcon /> : undefined}
                     />
                   </TableCell>
-                  <TableCell>
-                    <IconButton
-                      size="small"
-                      onClick={() => {
-                        setEditingMaterial(material);
-                        setOpenDialog(true);
-                      }}
-                    >
-                      <EditIcon />
-                    </IconButton>
-                    <IconButton
-                      size="small"
-                      color="error"
-                      onClick={() => handleDeleteMaterial(material.id)}
-                    >
-                      <DeleteIcon />
-                    </IconButton>
+                  <TableCell align="center">
+                    <Tooltip title="Histórico">
+                      <IconButton size="small" onClick={() => handleOpenHistory(material)}>
+                        <HistoryIcon />
+                      </IconButton>
+                    </Tooltip>
+                    <Tooltip title="Editar">
+                      <IconButton size="small" onClick={() => handleOpenDialog(material)}>
+                        <EditIcon />
+                      </IconButton>
+                    </Tooltip>
+                    <Tooltip title="Excluir">
+                      <IconButton 
+                        size="small" 
+                        color="error"
+                        onClick={() => handleDeleteMaterial(material.id)}
+                      >
+                        <DeleteIcon />
+                      </IconButton>
+                    </Tooltip>
                   </TableCell>
                 </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
-      </TableContainer>
+              ))}
+              {materials.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={8} align="center" sx={{ py: 4 }}>
+                    <Typography color="text.secondary">
+                      Nenhum material encontrado
+                    </Typography>
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </Paper>
 
-      <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
-        <DialogTitle>{editingMaterial ? 'Editar Material' : 'Adicionar Material'}</DialogTitle>
+      <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="md" fullWidth>
+        <DialogTitle>
+          {editingMaterial ? 'Editar Material' : 'Novo Material'}
+        </DialogTitle>
         <DialogContent>
-          <Box sx={{ mt: 2 }}>
-            <TextField
-              fullWidth
-              label="Nome do Material"
-              value={editingMaterial ? editingMaterial.name : newMaterial.name}
-              onChange={(e) => editingMaterial 
-                ? setEditingMaterial({ ...editingMaterial, name: e.target.value })
-                : setNewMaterial({ ...newMaterial, name: e.target.value })
-              }
-              sx={{ mb: 2 }}
-            />
-            <TextField
-              fullWidth
-              label="Quantidade"
-              type="number"
-              value={editingMaterial ? editingMaterial.quantity : newMaterial.quantity}
-              onChange={(e) => editingMaterial
-                ? setEditingMaterial({ ...editingMaterial, quantity: parseFloat(e.target.value) })
-                : setNewMaterial({ ...newMaterial, quantity: parseFloat(e.target.value) })
-              }
-              sx={{ mb: 2 }}
-            />
-            <TextField
-              fullWidth
-              label="Unidade"
-              value={editingMaterial ? editingMaterial.unit : newMaterial.unit}
-              onChange={(e) => editingMaterial
-                ? setEditingMaterial({ ...editingMaterial, unit: e.target.value })
-                : setNewMaterial({ ...newMaterial, unit: e.target.value })
-              }
-              sx={{ mb: 2 }}
-            />
-            <TextField
-              fullWidth
-              label="Estoque Mínimo"
-              type="number"
-              value={editingMaterial ? editingMaterial.minQuantity : newMaterial.minQuantity}
-              onChange={(e) => editingMaterial
-                ? setEditingMaterial({ ...editingMaterial, minQuantity: parseFloat(e.target.value) })
-                : setNewMaterial({ ...newMaterial, minQuantity: parseFloat(e.target.value) })
-              }
-              sx={{ mb: 2 }}
-            />
-            <TextField
-              fullWidth
-              label="Preço Unitário"
-              type="number"
-              value={editingMaterial ? editingMaterial.price : newMaterial.price}
-              onChange={(e) => editingMaterial
-                ? setEditingMaterial({ ...editingMaterial, price: parseFloat(e.target.value) })
-                : setNewMaterial({ ...newMaterial, price: parseFloat(e.target.value) })
-              }
-              InputProps={{
-                startAdornment: <Typography sx={{ mr: 1 }}>R$</Typography>
-              }}
-            />
-          </Box>
+          <Grid container spacing={2} sx={{ mt: 1 }}>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="Nome do Material *"
+                value={newMaterial.nome}
+                onChange={(e) => setNewMaterial({ ...newMaterial, nome: e.target.value })}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                select
+                fullWidth
+                label="Categoria *"
+                value={newMaterial.categoria}
+                onChange={(e) => setNewMaterial({ ...newMaterial, categoria: e.target.value })}
+              >
+                {categories.map(cat => (
+                  <MenuItem key={cat.value} value={cat.value}>{cat.label}</MenuItem>
+                ))}
+              </TextField>
+            </Grid>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label="Descrição"
+                multiline
+                rows={2}
+                value={newMaterial.descricao}
+                onChange={(e) => setNewMaterial({ ...newMaterial, descricao: e.target.value })}
+              />
+            </Grid>
+            <Grid item xs={12} sm={4}>
+              <TextField
+                fullWidth
+                label="Quantidade"
+                type="number"
+                value={newMaterial.quantidade}
+                onChange={(e) => setNewMaterial({ ...newMaterial, quantidade: parseFloat(e.target.value) || 0 })}
+              />
+            </Grid>
+            <Grid item xs={12} sm={4}>
+              <TextField
+                select
+                fullWidth
+                label="Unidade"
+                value={newMaterial.unidade}
+                onChange={(e) => setNewMaterial({ ...newMaterial, unidade: e.target.value })}
+              >
+                {unidades.map(uni => (
+                  <MenuItem key={uni.value} value={uni.value}>{uni.label}</MenuItem>
+                ))}
+              </TextField>
+            </Grid>
+            <Grid item xs={12} sm={4}>
+              <TextField
+                fullWidth
+                label="Quantidade Mínima"
+                type="number"
+                value={newMaterial.quantidade_minima}
+                onChange={(e) => setNewMaterial({ ...newMaterial, quantidade_minima: parseFloat(e.target.value) || 0 })}
+              />
+            </Grid>
+            <Grid item xs={12} sm={4}>
+              <TextField
+                fullWidth
+                label="Preço Unitário (R$)"
+                type="number"
+                value={newMaterial.preco_unitario}
+                onChange={(e) => setNewMaterial({ ...newMaterial, preco_unitario: parseFloat(e.target.value) || 0 })}
+                InputProps={{
+                  startAdornment: <InputAdornment position="start">R$</InputAdornment>
+                }}
+              />
+            </Grid>
+            <Grid item xs={12} sm={4}>
+              <TextField
+                fullWidth
+                label="Fornecedor"
+                value={newMaterial.fornecedor}
+                onChange={(e) => setNewMaterial({ ...newMaterial, fornecedor: e.target.value })}
+              />
+            </Grid>
+            <Grid item xs={12} sm={4}>
+              <TextField
+                fullWidth
+                label="Localização"
+                value={newMaterial.localizacao}
+                onChange={(e) => setNewMaterial({ ...newMaterial, localizacao: e.target.value })}
+                placeholder="Ex: Prateleira A1"
+              />
+            </Grid>
+            <Grid item xs={12} sm={4}>
+              <TextField
+                fullWidth
+                label="Lote"
+                value={newMaterial.lote}
+                onChange={(e) => setNewMaterial({ ...newMaterial, lote: e.target.value })}
+              />
+            </Grid>
+            <Grid item xs={12} sm={4}>
+              <TextField
+                fullWidth
+                label="Data de Validade"
+                type="date"
+                value={newMaterial.data_validade}
+                onChange={(e) => setNewMaterial({ ...newMaterial, data_validade: e.target.value })}
+                InputLabelProps={{ shrink: true }}
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label="Observações"
+                multiline
+                rows={2}
+                value={newMaterial.observacoes}
+                onChange={(e) => setNewMaterial({ ...newMaterial, observacoes: e.target.value })}
+              />
+            </Grid>
+          </Grid>
         </DialogContent>
         <DialogActions>
           <Button onClick={handleCloseDialog}>Cancelar</Button>
-          <Button onClick={handleAddMaterial} variant="contained">
+          <Button 
+            onClick={handleSaveMaterial} 
+            variant="contained"
+            disabled={!newMaterial.nome}
+          >
             {editingMaterial ? 'Salvar' : 'Adicionar'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={openHistoryDialog} onClose={handleCloseHistory} maxWidth="sm" fullWidth>
+        <DialogTitle>
+          Movimentações - {selectedMaterial?.nome}
+        </DialogTitle>
+        <DialogContent>
+          <Box sx={{ mt: 2 }}>
+            <Typography variant="subtitle2" gutterBottom>
+              Quantidade atual: {selectedMaterial?.quantidade} {selectedMaterial?.unidade}
+            </Typography>
+
+            <Grid container spacing={2} sx={{ mt: 1 }}>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  select
+                  fullWidth
+                  label="Tipo"
+                  value={movimentacao.tipo}
+                  onChange={(e) => setMovimentacao({ ...movimentacao, tipo: e.target.value })}
+                >
+                  <MenuItem value="entrada">Entrada</MenuItem>
+                  <MenuItem value="saida">Saída</MenuItem>
+                  <MenuItem value="ajuste">Ajuste</MenuItem>
+                </TextField>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Quantidade"
+                  type="number"
+                  value={movimentacao.quantidade}
+                  onChange={(e) => setMovimentacao({ ...movimentacao, quantidade: parseFloat(e.target.value) || 0 })}
+                />
+              </Grid>
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  label="Motivo"
+                  value={movimentacao.motivo}
+                  onChange={(e) => setMovimentacao({ ...movimentacao, motivo: e.target.value })}
+                />
+              </Grid>
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  label="Observações"
+                  multiline
+                  rows={2}
+                  value={movimentacao.observacoes}
+                  onChange={(e) => setMovimentacao({ ...movimentacao, observacoes: e.target.value })}
+                />
+              </Grid>
+            </Grid>
+
+            {selectedMaterial?.movimentacoes?.length > 0 && (
+              <Box sx={{ mt: 3 }}>
+                <Typography variant="subtitle2" gutterBottom>
+                  Histórico Recente
+                </Typography>
+                {selectedMaterial.movimentacoes.map((mov, index) => (
+                  <Paper key={index} sx={{ p: 1, mb: 1, bgcolor: '#f5f5f5' }}>
+                    <Typography variant="body2">
+                      <strong>{mov.tipo}:</strong> {mov.quantidade} {selectedMaterial.unidade}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {new Date(mov.created_at).toLocaleString()} - {mov.motivo}
+                    </Typography>
+                  </Paper>
+                ))}
+              </Box>
+            )}
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseHistory}>Cancelar</Button>
+          <Button 
+            onClick={handleMovimentacao} 
+            variant="contained"
+            disabled={movimentacao.quantidade <= 0}
+          >
+            Registrar
           </Button>
         </DialogActions>
       </Dialog>
@@ -255,7 +645,7 @@ const MaterialsManagement = () => {
         autoHideDuration={4000}
         onClose={() => setSnackbar({ ...snackbar, open: false })}
       >
-        <Alert severity={snackbar.severity}>
+        <Alert severity={snackbar.severity} sx={{ borderRadius: 2 }}>
           {snackbar.message}
         </Alert>
       </Snackbar>
