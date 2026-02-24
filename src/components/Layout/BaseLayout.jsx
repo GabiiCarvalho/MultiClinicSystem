@@ -24,10 +24,20 @@ const ContentContainer = styled(Container)({
   paddingBottom: 32,
 });
 
-export const BaseLayout = ({ children }) => {
+export const BaseLayout = ({
+  children,
+  maxWidth = "xl",
+  disablePadding = false,
+}) => {
   return (
     <GradientBackground>
-      <ContentContainer maxWidth="xl">
+      <ContentContainer
+        maxWidth={maxWidth}
+        sx={{
+          paddingTop: disablePadding ? 0 : 4,
+          paddingBottom: disablePadding ? 0 : 4,
+        }}
+      >
         {children}
       </ContentContainer>
     </GradientBackground>

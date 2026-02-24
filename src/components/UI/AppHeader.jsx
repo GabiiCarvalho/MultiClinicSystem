@@ -60,7 +60,7 @@ export const AppHeader = () => {
       atendente: 'Atendente',
       financeiro: 'Financeiro',
     };
-    return roles[user?.cargo] || user?.cargo;
+    return roles[user.role] || user.role;
   };
 
   return (

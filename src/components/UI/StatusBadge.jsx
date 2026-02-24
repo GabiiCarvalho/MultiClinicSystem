@@ -57,8 +57,13 @@ const StyledChip = styled(Chip)(({ bgcolor, textcolor }) => ({
 }));
 
 export const StatusBadge = ({ status }) => {
-  const style = statusStyles[status] || statusStyles.agendado;
-  
+  const normalized = status?.toLowerCase();
+  const style = statusStyles[normalized] || {
+    bg: "#E2E8F0",
+    color: "#4A5568",
+    label: normalized || "Status",
+  };
+
   return (
     <StyledChip
       bgcolor={style.bg}

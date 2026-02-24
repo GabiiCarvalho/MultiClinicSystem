@@ -12,5 +12,7 @@ export const PastelCard = styled(Paper)(({ theme }) => ({
   '&:hover': {
     boxShadow: '0 16px 48px rgba(167,199,231,0.15)',
     borderColor: '#A7C7E7',
+    maxWidth: '100%',
+overflow: 'hidden',
   },
 }));

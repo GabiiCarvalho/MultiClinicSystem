@@ -29,18 +29,17 @@ export const ClinicLogo = ({ size = 60, variant = 'circular' }) => {
   );
 };
 
-// Versão com Avatar do MUI (alternativa)
-export const ClinicAvatar = ({ size = 60 }) => {
+export const ClinicAvatar = ({ size = 60, src }) => {
   return (
     <Avatar
-      src={logo}
+      src={src || logo}
       alt="Clinic Logo"
       sx={{
         width: size,
         height: size,
-        borderRadius: '50%',
-        border: '2px solid rgba(255,255,255,0.8)',
-        boxShadow: '0 4px 12px rgba(0,0,0,0.05)',
+        borderRadius: "50%",
+        border: "2px solid rgba(255,255,255,0.8)",
+        boxShadow: "0 4px 12px rgba(0,0,0,0.05)",
       }}
     />
   );

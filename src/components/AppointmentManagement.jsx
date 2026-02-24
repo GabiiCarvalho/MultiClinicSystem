@@ -1,6 +1,5 @@
 import { useState, useContext, useEffect } from 'react';
-import { PatientsContext } from '../contexts/PatientsContext';
-import { AuthContext } from '../contexts/AuthContext';
+import { AppointmentsContext } from '../contexts/AppointmentsContext';
 import {
   Box,
   Typography,
@@ -20,249 +19,97 @@ import {
   Alert,
   Snackbar,
   Stack,
-  Divider,
-  InputAdornment,
-  CircularProgress
+  CircularProgress,
+  InputAdornment
 } from '@mui/material';
+
 import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { ptBR } from 'date-fns/locale';
-import { format, isSameDay, parseISO } from 'date-fns';
-import { styled } from '@mui/material/styles';
+import { format, parseISO } from 'date-fns';
+
 import PhoneIcon from '@mui/icons-material/Phone';
 import WhatsAppIcon from '@mui/icons-material/WhatsApp';
 import EmailIcon from '@mui/icons-material/Email';
 import EventIcon from '@mui/icons-material/Event';
 import CancelIcon from '@mui/icons-material/Cancel';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
-import ReceiptIcon from '@mui/icons-material/Receipt';
 import SearchIcon from '@mui/icons-material/Search';
-import ArrowBackIcon from '@mui/icons-material/ArrowBack';
-import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
-import TodayIcon from '@mui/icons-material/Today';
-
-// Função segura para formatar data
-const formatTime = (dateValue) => {
-  if (!dateValue) return '--:--';
-  
-  try {
-    let date;
-    if (typeof dateValue === 'string') {
-      date = new Date(dateValue);
-    } else if (dateValue instanceof Date) {
-      date = dateValue;
-    } else {
-      return '--:--';
-    }
-    
-    if (isNaN(date.getTime())) return '--:--';
-    
-    return date.toLocaleTimeString('pt-BR', {
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  } catch (e) {
-    return '--:--';
-  }
-};
-
-const formatDate = (dateValue) => {
-  if (!dateValue) return 'Data não informada';
-  
-  try {
-    let date;
-    if (typeof dateValue === 'string') {
-      date = new Date(dateValue);
-    } else if (dateValue instanceof Date) {
-      date = dateValue;
-    } else {
-      return 'Data inválida';
-    }
-    
-    if (isNaN(date.getTime())) return 'Data inválida';
-    
-    return format(date, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR });
-  } catch (e) {
-    return 'Data inválida';
-  }
-};
-
-const StyledCard = styled(Card)({
-  transition: 'all 0.3s ease',
-  borderRadius: 16,
-  '&:hover': {
-    transform: 'translateY(-4px)',
-    boxShadow: '0 12px 48px rgba(167,199,231,0.2)',
-  },
-});
-
-const PatientAvatar = styled(Avatar)({
-  width: 56,
-  height: 56,
-  background: 'linear-gradient(135deg, #A7C7E7 0%, #F9D7D7 100%)',
-  color: '#4A5568',
-  fontWeight: 600,
-  fontSize: '1.5rem',
-});
-
-const TimeChip = styled(Chip)({
-  backgroundColor: '#F0F4F8',
-  borderRadius: 20,
-  fontWeight: 500,
-  '& .MuiChip-icon': {
-    color: '#A7C7E7',
-  },
-});
 
 const AppointmentManagement = () => {
-  const { patients, updatePatientStatus, loading } = useContext(PatientsContext);
-  const { user } = useContext(AuthContext);
+  const {
+    appointments,
+    loading,
+    fetchAppointmentsByDate,
+    updateAppointmentStatus
+  } = useContext(AppointmentsContext);
+
   const [selectedDate, setSelectedDate] = useState(new Date());
-  const [appointments, setAppointments] = useState([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedAppointment, setSelectedAppointment] = useState(null);
   const [openCancelDialog, setOpenCancelDialog] = useState(false);
-  const [openBudgetDialog, setOpenBudgetDialog] = useState(false);
-  const [selectedPatient, setSelectedPatient] = useState(null);
   const [cancelReason, setCancelReason] = useState('');
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
-  const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
-    if (patients && patients.length > 0) {
-      try {
-        console.log('Todos os pacientes:', patients);
-        
-        // Filtrar apenas pacientes com status 'agendado' E pagos
-        const filtered = patients.filter(p => {
-          // Verificar se existe
-          if (!p) return false;
-          
-          // Log para debug
-          console.log('Verificando paciente:', p.id, 'status:', p.status, 'pago:', p.pago);
-          
-          // Só mostrar se estiver agendado E pago
-          const isAgendado = p.status === 'agendado';
-          const isPago = p.pago === true;
-          
-          if (!isAgendado || !isPago) {
-            if (p.status === 'pendente_pagamento') {
-              console.log('Paciente aguardando pagamento:', p.name || p.nome);
-            }
-            return false;
-          }
-          
-          if (!p.scheduleDate) return false;
-          
-          try {
-            const scheduleDate = typeof p.scheduleDate === 'string' 
-              ? new Date(p.scheduleDate) 
-              : p.scheduleDate;
-            
-            if (!(scheduleDate instanceof Date) || isNaN(scheduleDate.getTime())) return false;
-            
-            return isSameDay(scheduleDate, selectedDate);
-          } catch (e) {
-            return false;
-          }
-        }).sort((a, b) => {
-          try {
-            const dateA = a.scheduleDate ? new Date(a.scheduleDate) : new Date();
-            const dateB = b.scheduleDate ? new Date(b.scheduleDate) : new Date();
-            return dateA - dateB;
-          } catch (e) {
-            return 0;
-          }
-        });
-        
-        console.log('Agendamentos pagos para hoje:', filtered.length);
-        setAppointments(filtered);
-      } catch (error) {
-        console.error('Erro ao filtrar agendamentos:', error);
-        setAppointments([]);
-      }
-    } else {
-      console.log('Nenhum paciente encontrado');
-      setAppointments([]);
-    }
-  }, [patients, selectedDate]);
+    fetchAppointmentsByDate(selectedDate);
+  }, [selectedDate]);
 
-  const handleContact = (patient, method) => {
-    if (!patient) return;
-    
-    const phone = patient.phone || patient.telefone;
-    const email = patient.email;
-    
-    const actions = {
-      phone: () => phone && (window.location.href = `tel:${phone}`),
-      whatsapp: () => phone && window.open(`https://wa.me/${phone.replace(/\D/g, '')}`, '_blank'),
-      email: () => email && (window.location.href = `mailto:${email}`),
-    };
-    
-    try {
-      actions[method]?.();
-      setSnackbar({
-        open: true,
-        message: `Contato iniciado com ${patient.name || patient.nome || 'paciente'}`,
-        severity: 'info',
-      });
-    } catch (error) {
-      console.error('Erro ao contatar:', error);
-    }
-  };
-
-  const handleConfirm = (patient) => {
-    if (!patient) return;
+  const handleConfirm = async (appointment) => {
+    await updateAppointmentStatus(appointment.id, 'confirmado');
     setSnackbar({
       open: true,
-      message: `Consulta confirmada para ${patient.name || patient.nome || 'paciente'}`,
-      severity: 'success',
+      message: `Consulta confirmada para ${appointment.paciente.nome}`,
+      severity: 'success'
     });
   };
 
-  const handleCancel = () => {
-    if (selectedPatient) {
-      try {
-        updatePatientStatus(selectedPatient.id, 'cancelado', cancelReason);
-        setOpenCancelDialog(false);
-        setCancelReason('');
-        setSnackbar({
-          open: true,
-          message: `Agendamento cancelado para ${selectedPatient.name || selectedPatient.nome}`,
-          severity: 'warning',
-        });
-      } catch (error) {
-        console.error('Erro ao cancelar:', error);
-      }
-    }
+  const handleCancel = async () => {
+    if (!selectedAppointment) return;
+
+    await updateAppointmentStatus(
+      selectedAppointment.id,
+      'cancelado',
+      cancelReason
+    );
+
+    setOpenCancelDialog(false);
+    setCancelReason('');
+    setSnackbar({
+      open: true,
+      message: 'Agendamento cancelado com sucesso',
+      severity: 'warning'
+    });
   };
 
-  const navigateDate = (direction) => {
-    const newDate = new Date(selectedDate);
-    newDate.setDate(newDate.getDate() + direction);
-    setSelectedDate(newDate);
+  const handleContact = (appointment, method) => {
+    const { telefone, email } = appointment.paciente;
+
+    if (method === 'phone' && telefone)
+      window.location.href = `tel:${telefone}`;
+
+    if (method === 'whatsapp' && telefone)
+      window.open(`https://wa.me/${telefone.replace(/\D/g, '')}`, '_blank');
+
+    if (method === 'email' && email)
+      window.location.href = `mailto:${email}`;
   };
 
-  const goToToday = () => {
-    setSelectedDate(new Date());
-  };
-
-  const filteredAppointments = appointments.filter(app => {
+  const filteredAppointments = appointments.filter((a) => {
     if (!searchTerm) return true;
     const term = searchTerm.toLowerCase();
-    const nome = app.name || app.nome || '';
-    const phone = app.phone || app.telefone || '';
-    const email = app.email || '';
-    
+
     return (
-      nome.toLowerCase().includes(term) ||
-      phone.includes(term) ||
-      email.toLowerCase().includes(term)
+      a.paciente.nome.toLowerCase().includes(term) ||
+      a.paciente.telefone?.includes(term) ||
+      a.paciente.email?.toLowerCase().includes(term)
     );
   });
 
   if (loading) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '50vh' }}>
-        <CircularProgress sx={{ color: '#A7C7E7' }} />
+      <Box sx={{ display: 'flex', justifyContent: 'center', mt: 8 }}>
+        <CircularProgress />
       </Box>
     );
   }
@@ -270,476 +117,167 @@ const AppointmentManagement = () => {
   return (
     <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={ptBR}>
       <Box>
+
+        {/* HEADER */}
         <Box sx={{ mb: 4 }}>
-          <Typography variant="h4" gutterBottom sx={{ fontWeight: 600 }}>
-            📋 Gestão de Agendamentos
-          </Typography>
-          <Typography variant="body1" color="text.secondary">
-            Gerencie os agendamentos do dia, confirme horários e entre em contato com os pacientes
+          <Typography variant="h4" fontWeight={600}>
+            Gestão de Agendamentos
           </Typography>
         </Box>
 
-        <Box sx={{ 
-          p: 3, 
-          mb: 4, 
-          bgcolor: 'white', 
-          borderRadius: 3,
-          boxShadow: '0 4px 12px rgba(0,0,0,0.02)',
-          border: '1px solid #F0F0F0'
-        }}>
-          <Box sx={{ 
-            display: 'flex', 
-            flexDirection: { xs: 'column', md: 'row' },
-            justifyContent: 'space-between', 
-            alignItems: 'center',
-            gap: 2
-          }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-              <Button
-                variant="outlined"
-                onClick={() => navigateDate(-1)}
-                startIcon={<ArrowBackIcon />}
-                sx={{ borderRadius: 30 }}
-              >
-                Anterior
-              </Button>
-              <Button
-                variant="contained"
-                onClick={goToToday}
-                startIcon={<TodayIcon />}
-                sx={{ borderRadius: 30 }}
-              >
-                Hoje
-              </Button>
-              <Button
-                variant="outlined"
-                onClick={() => navigateDate(1)}
-                endIcon={<ArrowForwardIcon />}
-                sx={{ borderRadius: 30 }}
-              >
-                Próximo
-              </Button>
-            </Box>
+        {/* DATA + BUSCA */}
+        <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} mb={4}>
+          <DatePicker
+            label="Selecionar Data"
+            value={selectedDate}
+            onChange={(date) => setSelectedDate(date)}
+            format="dd/MM/yyyy"
+          />
 
-            <DatePicker
-              label="Selecionar Data"
-              value={selectedDate}
-              onChange={setSelectedDate}
-              format="dd/MM/yyyy"
-              slotProps={{
-                textField: {
-                  size: 'small',
-                  sx: { minWidth: 200 }
-                }
-              }}
-            />
-
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <EventIcon sx={{ color: '#A7C7E7' }} />
-              <Typography variant="h6" sx={{ fontWeight: 500 }}>
-                {format(selectedDate, "EEEE, dd 'de' MMMM", { locale: ptBR })}
-              </Typography>
-            </Box>
-          </Box>
-        </Box>
-
-        <Box sx={{ mb: 3 }}>
           <TextField
-            fullWidth
-            variant="outlined"
-            placeholder="Buscar paciente por nome, telefone ou email..."
+            placeholder="Buscar paciente..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             InputProps={{
               startAdornment: (
                 <InputAdornment position="start">
-                  <SearchIcon sx={{ color: '#A7C7E7' }} />
+                  <SearchIcon />
                 </InputAdornment>
-              ),
+              )
             }}
-            sx={{ maxWidth: 400 }}
           />
-        </Box>
+        </Stack>
 
+        {/* LISTA */}
         <Grid container spacing={3}>
-          {filteredAppointments.length > 0 ? (
-            filteredAppointments.map(appointment => (
-              <Grid item xs={12} key={appointment.id}>
-                <StyledCard>
-                  <CardContent sx={{ p: 3 }}>
-                    <Box sx={{ 
-                      display: 'flex', 
-                      flexDirection: { xs: 'column', sm: 'row' },
-                      justifyContent: 'space-between', 
-                      alignItems: { xs: 'stretch', sm: 'flex-start' },
-                      gap: 2
-                    }}>
-                      <Box sx={{ display: 'flex', gap: 3, alignItems: 'center' }}>
-                        <PatientAvatar>
-                          {(appointment.name || appointment.nome) ? 
-                            (appointment.name || appointment.nome).charAt(0).toUpperCase() : '?'}
-                        </PatientAvatar>
-                        
-                        <Box>
-                          <Typography variant="h6" sx={{ fontWeight: 600, mb: 0.5 }}>
-                            {appointment.name || appointment.nome || 'Nome não informado'}
-                          </Typography>
-                          <Stack direction="row" spacing={1} sx={{ mb: 1, flexWrap: 'wrap' }}>
-                            <Chip
-                              label={appointment.procedureType || appointment.procedimento || 'Procedimento'}
-                              size="small"
-                              sx={{
-                                backgroundColor: '#F0F4F8',
-                                color: '#4A5568',
-                              }}
-                            />
-                            <Chip
-                              label={appointment.dentist || 'Dentista'}
-                              size="small"
-                              sx={{
-                                backgroundColor: '#F9D7D7',
-                                color: '#A65D5D',
-                              }}
-                            />
-                            <Chip
-                              label="Pago"
-                              size="small"
-                              sx={{
-                                backgroundColor: '#C5E0C5',
-                                color: '#4F7A4F',
-                              }}
-                            />
-                          </Stack>
-                          <Stack direction="row" spacing={2} sx={{ flexWrap: 'wrap' }}>
-                            {(appointment.phone || appointment.telefone) && (
-                              <Typography variant="body2" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                <PhoneIcon sx={{ fontSize: 16, color: '#A7C7E7' }} />
-                                {appointment.phone || appointment.telefone}
-                              </Typography>
-                            )}
-                            {appointment.email && (
-                              <Typography variant="body2" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                <EmailIcon sx={{ fontSize: 16, color: '#F9D7D7' }} />
-                                {appointment.email}
-                              </Typography>
-                            )}
-                          </Stack>
-                        </Box>
-                      </Box>
-
-                      <Box sx={{ 
-                        display: 'flex', 
-                        flexDirection: { xs: 'row', sm: 'column' },
-                        alignItems: { xs: 'center', sm: 'flex-end' },
-                        justifyContent: 'space-between',
-                        gap: 2
-                      }}>
-                        <TimeChip
-                          label={formatTime(appointment.scheduleDate)}
-                          icon={<EventIcon />}
-                        />
-                        
-                        <Box sx={{ display: 'flex', gap: 1 }}>
-                          {(appointment.phone || appointment.telefone) && (
-                            <>
-                              <Tooltip title="Ligar">
-                                <IconButton 
-                                  size="small"
-                                  onClick={() => handleContact(appointment, 'phone')}
-                                  sx={{ 
-                                    bgcolor: '#F0F4F8',
-                                    '&:hover': { bgcolor: '#E0E8F0' }
-                                  }}
-                                >
-                                  <PhoneIcon sx={{ fontSize: 20, color: '#4A5568' }} />
-                                </IconButton>
-                              </Tooltip>
-                              
-                              <Tooltip title="WhatsApp">
-                                <IconButton 
-                                  size="small"
-                                  onClick={() => handleContact(appointment, 'whatsapp')}
-                                  sx={{ 
-                                    bgcolor: '#F0F4F8',
-                                    '&:hover': { bgcolor: '#E0E8F0' }
-                                  }}
-                                >
-                                  <WhatsAppIcon sx={{ fontSize: 20, color: '#25D366' }} />
-                                </IconButton>
-                              </Tooltip>
-                            </>
-                          )}
-                          
-                          {appointment.email && (
-                            <Tooltip title="Email">
-                              <IconButton 
-                                size="small"
-                                onClick={() => handleContact(appointment, 'email')}
-                                sx={{ 
-                                  bgcolor: '#F0F4F8',
-                                  '&:hover': { bgcolor: '#E0E8F0' }
-                                }}
-                              >
-                                <EmailIcon sx={{ fontSize: 20, color: '#4A5568' }} />
-                              </IconButton>
-                            </Tooltip>
-                          )}
-                          
-                          <Tooltip title="Confirmar">
-                            <IconButton 
-                              size="small"
-                              onClick={() => handleConfirm(appointment)}
-                              sx={{ 
-                                bgcolor: '#C5E0C5',
-                                '&:hover': { bgcolor: '#B0D0B0' }
-                              }}
-                            >
-                              <CheckCircleIcon sx={{ fontSize: 20, color: '#4F7A4F' }} />
-                            </IconButton>
-                          </Tooltip>
-                          
-                          <Tooltip title="Criar Orçamento">
-                            <IconButton 
-                              size="small"
-                              onClick={() => {
-                                setSelectedPatient(appointment);
-                                setOpenBudgetDialog(true);
-                              }}
-                              sx={{ 
-                                bgcolor: '#D4E6F1',
-                                '&:hover': { bgcolor: '#C0D6E0' }
-                              }}
-                            >
-                              <ReceiptIcon sx={{ fontSize: 20, color: '#4A7B8C' }} />
-                            </IconButton>
-                          </Tooltip>
-                          
-                          <Tooltip title="Cancelar">
-                            <IconButton 
-                              size="small"
-                              onClick={() => {
-                                setSelectedPatient(appointment);
-                                setOpenCancelDialog(true);
-                              }}
-                              sx={{ 
-                                bgcolor: '#FFC9C9',
-                                '&:hover': { bgcolor: '#F0B0B0' }
-                              }}
-                            >
-                              <CancelIcon sx={{ fontSize: 20, color: '#A65D5D' }} />
-                            </IconButton>
-                          </Tooltip>
-                        </Box>
-                      </Box>
-                    </Box>
-
-                    {appointment.observations && (
-                      <Box sx={{ 
-                        mt: 2, 
-                        p: 2, 
-                        bgcolor: '#F9FAFB', 
-                        borderRadius: 2,
-                        border: '1px solid #F0F0F0'
-                      }}>
-                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
-                          Observações:
-                        </Typography>
-                        <Typography variant="body2">
-                          {appointment.observations}
-                        </Typography>
-                      </Box>
-                    )}
-                  </CardContent>
-                </StyledCard>
-              </Grid>
-            ))
-          ) : (
+          {filteredAppointments.length === 0 && (
             <Grid item xs={12}>
-              <Box sx={{ 
-                p: 6, 
-                textAlign: 'center', 
-                bgcolor: 'white', 
-                borderRadius: 3,
-                boxShadow: '0 4px 12px rgba(0,0,0,0.02)',
-                border: '1px solid #F0F0F0'
-              }}>
-                <EventIcon sx={{ fontSize: 60, color: '#D0DCE8', mb: 2 }} />
-                <Typography variant="h6" gutterBottom sx={{ color: '#718096' }}>
-                  Nenhum agendamento pago para esta data
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  Selecione outra data ou aguarde novos pagamentos
-                </Typography>
-              </Box>
+              <Typography>Nenhum agendamento encontrado.</Typography>
             </Grid>
           )}
+
+          {filteredAppointments.map((appointment) => (
+            <Grid item xs={12} key={appointment.id}>
+              <Card sx={{ borderRadius: 4 }}>
+                <CardContent>
+
+                  <Stack
+                    direction={{ xs: 'column', md: 'row' }}
+                    justifyContent="space-between"
+                    spacing={2}
+                  >
+                    {/* INFO PACIENTE */}
+                    <Stack direction="row" spacing={2} alignItems="center">
+                      <Avatar>
+                        {appointment.paciente.nome.charAt(0)}
+                      </Avatar>
+
+                      <Box>
+                        <Typography fontWeight={600}>
+                          {appointment.paciente.nome}
+                        </Typography>
+
+                        <Typography variant="body2">
+                          {appointment.procedimento.nome}
+                        </Typography>
+
+                        <Typography variant="caption">
+                          Dentista: {appointment.dentista.nome}
+                        </Typography>
+                      </Box>
+                    </Stack>
+
+                    {/* HORÁRIO + AÇÕES */}
+                    <Stack direction="row" spacing={1} alignItems="center">
+
+                      <Chip
+                        icon={<EventIcon />}
+                        label={format(parseISO(appointment.data), "HH:mm")}
+                      />
+
+                      {appointment.payment_status === 'pago' && (
+                        <Chip
+                          label="Pago"
+                          color="success"
+                          size="small"
+                        />
+                      )}
+
+                      <Tooltip title="Ligar">
+                        <IconButton onClick={() => handleContact(appointment, 'phone')}>
+                          <PhoneIcon />
+                        </IconButton>
+                      </Tooltip>
+
+                      <Tooltip title="WhatsApp">
+                        <IconButton onClick={() => handleContact(appointment, 'whatsapp')}>
+                          <WhatsAppIcon />
+                        </IconButton>
+                      </Tooltip>
+
+                      <Tooltip title="Confirmar">
+                        <IconButton
+                          onClick={() => handleConfirm(appointment)}
+                          color="success"
+                        >
+                          <CheckCircleIcon />
+                        </IconButton>
+                      </Tooltip>
+
+                      <Tooltip title="Cancelar">
+                        <IconButton
+                          color="error"
+                          onClick={() => {
+                            setSelectedAppointment(appointment);
+                            setOpenCancelDialog(true);
+                          }}
+                        >
+                          <CancelIcon />
+                        </IconButton>
+                      </Tooltip>
+
+                    </Stack>
+                  </Stack>
+
+                </CardContent>
+              </Card>
+            </Grid>
+          ))}
         </Grid>
 
-        {/* Diálogo de Cancelamento */}
-        <Dialog 
-          open={openCancelDialog} 
-          onClose={() => setOpenCancelDialog(false)}
-          PaperProps={{ sx: { borderRadius: 4, p: 2 } }}
-        >
-          <DialogTitle sx={{ pb: 1 }}>
-            <Typography variant="h6" sx={{ fontWeight: 600 }}>
-              Cancelar Agendamento
-            </Typography>
-          </DialogTitle>
+        {/* CANCELAMENTO */}
+        <Dialog open={openCancelDialog} onClose={() => setOpenCancelDialog(false)}>
+          <DialogTitle>Cancelar Agendamento</DialogTitle>
           <DialogContent>
-            {selectedPatient && (
-              <Box sx={{ mt: 2 }}>
-                <Box sx={{ mb: 3, p: 2, bgcolor: '#F9FAFB', borderRadius: 2 }}>
-                  <Typography variant="body2" gutterBottom>
-                    <strong>Paciente:</strong> {selectedPatient.name || selectedPatient.nome}
-                  </Typography>
-                  <Typography variant="body2" gutterBottom>
-                    <strong>Procedimento:</strong> {selectedPatient.procedureType || selectedPatient.procedimento}
-                  </Typography>
-                  <Typography variant="body2" gutterBottom>
-                    <strong>Data/Hora:</strong> {formatDate(selectedPatient.scheduleDate)}
-                  </Typography>
-                </Box>
-                
-                <TextField
-                  fullWidth
-                  multiline
-                  rows={3}
-                  label="Motivo do Cancelamento"
-                  value={cancelReason}
-                  onChange={(e) => setCancelReason(e.target.value)}
-                  placeholder="Digite o motivo do cancelamento..."
-                />
-              </Box>
-            )}
+            <TextField
+              fullWidth
+              multiline
+              rows={3}
+              label="Motivo"
+              value={cancelReason}
+              onChange={(e) => setCancelReason(e.target.value)}
+              sx={{ mt: 2 }}
+            />
           </DialogContent>
-          <DialogActions sx={{ p: 3, pt: 2 }}>
-            <Button 
-              onClick={() => setOpenCancelDialog(false)}
-              sx={{ borderRadius: 30 }}
-            >
-              Voltar
-            </Button>
-            <Button 
-              onClick={handleCancel} 
-              variant="contained"
-              sx={{ 
-                borderRadius: 30,
-                bgcolor: '#FFC9C9',
-                color: '#A65D5D',
-                '&:hover': {
-                  bgcolor: '#F0B0B0',
-                }
-              }}
-            >
+          <DialogActions>
+            <Button onClick={() => setOpenCancelDialog(false)}>Voltar</Button>
+            <Button color="error" variant="contained" onClick={handleCancel}>
               Confirmar Cancelamento
             </Button>
           </DialogActions>
         </Dialog>
 
-        {/* Diálogo de Orçamento */}
-        <Dialog 
-          open={openBudgetDialog} 
-          onClose={() => setOpenBudgetDialog(false)} 
-          maxWidth="sm" 
-          fullWidth
-          PaperProps={{ sx: { borderRadius: 4, p: 2 } }}
-        >
-          <DialogTitle sx={{ pb: 1 }}>
-            <Typography variant="h6" sx={{ fontWeight: 600 }}>
-              Criar Orçamento
-            </Typography>
-          </DialogTitle>
-          <DialogContent>
-            {selectedPatient && (
-              <Box sx={{ mt: 2 }}>
-                <Box sx={{ mb: 3, p: 2, bgcolor: '#F9FAFB', borderRadius: 2 }}>
-                  <Typography variant="body2" gutterBottom>
-                    <strong>Paciente:</strong> {selectedPatient.name || selectedPatient.nome}
-                  </Typography>
-                  <Typography variant="body2">
-                    <strong>Telefone:</strong> {selectedPatient.phone || selectedPatient.telefone}
-                  </Typography>
-                </Box>
-
-                <Grid container spacing={2}>
-                  <Grid item xs={12}>
-                    <TextField
-                      fullWidth
-                      label="Procedimento"
-                      value={selectedPatient.procedureType || selectedPatient.procedimento || ''}
-                      disabled
-                    />
-                  </Grid>
-                  <Grid item xs={12}>
-                    <TextField
-                      fullWidth
-                      label="Valor Estimado"
-                      type="number"
-                      defaultValue={selectedPatient.valor || 150}
-                      InputProps={{
-                        startAdornment: <Typography sx={{ mr: 1, color: '#718096' }}>R$</Typography>
-                      }}
-                    />
-                  </Grid>
-                  <Grid item xs={12}>
-                    <TextField
-                      fullWidth
-                      multiline
-                      rows={3}
-                      label="Observações"
-                      placeholder="Descreva os detalhes do orçamento..."
-                    />
-                  </Grid>
-                </Grid>
-              </Box>
-            )}
-          </DialogContent>
-          <DialogActions sx={{ p: 3, pt: 2 }}>
-            <Button 
-              onClick={() => setOpenBudgetDialog(false)}
-              sx={{ borderRadius: 30 }}
-            >
-              Cancelar
-            </Button>
-            <Button 
-              variant="contained"
-              sx={{ 
-                borderRadius: 30,
-                bgcolor: '#A7C7E7',
-                '&:hover': { bgcolor: '#8FB0D0' }
-              }}
-              onClick={() => {
-                setSnackbar({
-                  open: true,
-                  message: `Orçamento criado para ${selectedPatient?.name || selectedPatient?.nome}`,
-                  severity: 'success'
-                });
-                setOpenBudgetDialog(false);
-              }}
-            >
-              Criar Orçamento
-            </Button>
-          </DialogActions>
-        </Dialog>
-
+        {/* SNACKBAR */}
         <Snackbar
           open={snackbar.open}
           autoHideDuration={4000}
           onClose={() => setSnackbar({ ...snackbar, open: false })}
-          anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
         >
-          <Alert 
-            severity={snackbar.severity}
-            onClose={() => setSnackbar({ ...snackbar, open: false })}
-            sx={{ 
-              borderRadius: 30,
-              boxShadow: '0 4px 20px rgba(0,0,0,0.05)',
-            }}
-          >
+          <Alert severity={snackbar.severity}>
             {snackbar.message}
           </Alert>
         </Snackbar>
+
       </Box>
     </LocalizationProvider>
   );
