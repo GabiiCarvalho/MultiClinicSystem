@@ -1,13 +1,14 @@
 import { createContext, useState, useCallback } from "react";
 import axios from "axios";
 
-export const AppointmentsContext = createContext();
+const AppointmentsContext = createContext();
+export default AppointmentsContext;
 
 export const AppointmentsProvider = ({ children }) => {
   const [appointments, setAppointments] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  const API_URL = "http://localhost:3000/api"; // ajuste se necessário
+  const API_URL = "http://localhost:3000/api";
 
   const getAuthConfig = () => {
     const token = localStorage.getItem("token");
@@ -42,7 +43,7 @@ export const AppointmentsProvider = ({ children }) => {
   }, []);
 
   /**
-   * Atualizar status do agendamento
+   * Atualizar status
    */
   const updateAppointmentStatus = async (id, status) => {
     try {
@@ -65,20 +66,26 @@ export const AppointmentsProvider = ({ children }) => {
   };
 
   /**
-   * Atualizar data/hora do agendamento (drag & drop)
+   * Atualizar data/hora (drag & drop)
    */
   const updateAppointmentDate = async (id, newDate) => {
     try {
+      const inicio = new Date(newDate);
+      const fim = new Date(inicio.getTime() + 60 * 60000); // +1h
+
       await axios.patch(
         `${API_URL}/agendamentos/${id}/data`,
-        { data: newDate },
+        {
+          data_hora: inicio,
+          data_hora_fim: fim
+        },
         getAuthConfig()
       );
 
       setAppointments((prev) =>
         prev.map((appointment) =>
           appointment.id === id
-            ? { ...appointment, data: newDate }
+            ? { ...appointment, data_hora: inicio }
             : appointment
         )
       );
@@ -88,7 +95,7 @@ export const AppointmentsProvider = ({ children }) => {
   };
 
   /**
-   * Criar novo agendamento
+   * Criar agendamento
    */
   const createAppointment = async (appointmentData) => {
     try {

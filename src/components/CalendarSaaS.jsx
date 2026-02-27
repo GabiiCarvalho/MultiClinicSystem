@@ -29,7 +29,7 @@ import CheckIcon from "@mui/icons-material/Check";
 
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 
-import { AppointmentsContext } from "../contexts/AppointmentsContext";
+import AppointmentsContext from "../contexts/AppointmentsContext";
 
 const statusColor = {
   agendado: "#1976d2",
@@ -54,31 +54,33 @@ const CalendarSaaS = () => {
 
   useEffect(() => {
     fetchAppointmentsByDate(selectedDate);
-  }, [selectedDate]);
+  }, [selectedDate, fetchAppointmentsByDate]);
 
   const dayAppointments = useMemo(() => {
     return appointments
-      .filter((a) => isSameDay(parseISO(a.data), selectedDate))
-      .sort((a, b) => new Date(a.data) - new Date(b.data));
+      .filter((a) => isSameDay(parseISO(a.data_hora), selectedDate))
+      .sort((a, b) => new Date(a.data_hora) - new Date(b.data_hora));
   }, [appointments, selectedDate]);
 
   const handleDragEnd = (result) => {
-    if (!result.destination) return;
+  const { destination, source, draggableId } = result;
 
-    const appointmentId = result.draggableId;
-    const appointment = appointments.find(
-      (a) => a.id.toString() === appointmentId
-    );
+  if (!destination) return;
+  if (destination.index === source.index) return;
 
-    if (!appointment) return;
+  const appointmentId = Number(draggableId);
+  const appointment = appointments.find(a => a.id === appointmentId);
+  if (!appointment) return;
 
-    const newIndex = result.destination.index;
-    const newTime = new Date(selectedDate);
-    newTime.setHours(8 + newIndex);
-    newTime.setMinutes(0);
+  const newIndex = destination.index;
 
-    updateAppointmentDate(appointment.id, newTime);
-  };
+  const newTime = new Date(selectedDate);
+  newTime.setHours(8 + newIndex);
+  newTime.setMinutes(0);
+  newTime.setSeconds(0);
+
+  updateAppointmentDate(appointmentId, newTime);
+};
 
   const changeStatus = (status) => {
     updateAppointmentStatus(selectedAppointment.id, status);
@@ -103,13 +105,13 @@ const CalendarSaaS = () => {
           </Typography>
 
           <ButtonGroup sx={{ mb: 3 }}>
-            <Button onClick={() => setSelectedDate(new Date(selectedDate.setDate(selectedDate.getDate() - 1)))}>
+            <Button onClick={() => {const newDate = new Date(selectedDate); newDate.setDate(newDate.getDate() -1); setSelectedDate(newDate);}}>
               Anterior
             </Button>
             <Button onClick={() => setSelectedDate(new Date())}>
               Hoje
             </Button>
-            <Button onClick={() => setSelectedDate(new Date(selectedDate.setDate(selectedDate.getDate() + 1)))}>
+            <Button onClick={() => {const newDate = new Date(selectedDate); newDate.setDate(newDate.getDate() + 1); setSelectedDate(newDate);}}>
               Próximo
             </Button>
           </ButtonGroup>
@@ -152,13 +154,13 @@ const CalendarSaaS = () => {
                         <Grid container justifyContent="space-between">
                           <Grid item>
                             <Typography fontWeight={600}>
-                              {appointment.paciente.nome}
+                              {appointment.paciente?.nome}
                             </Typography>
                             <Typography variant="body2">
-                              {appointment.procedimento.nome}
+                              {appointment.procedimento?.nome}
                             </Typography>
                             <Typography variant="caption">
-                              Dentista: {appointment.dentista.nome}
+                              Dentista: {appointment.dentista?.nome}
                             </Typography>
                           </Grid>
 
@@ -172,7 +174,7 @@ const CalendarSaaS = () => {
                               }}
                             />
                             <Typography variant="body2" mt={1}>
-                              {format(parseISO(appointment.data), "HH:mm")}
+                              {format(parseISO(appointment.data_hora), "HH:mm")}
                             </Typography>
                           </Grid>
                         </Grid>
@@ -192,18 +194,18 @@ const CalendarSaaS = () => {
               {selectedAppointment && (
                 <>
                   <Typography fontWeight={600}>
-                    {selectedAppointment.paciente.nome}
+                    {selectedAppointment?.paciente?.nome}
                   </Typography>
                   <Typography>
-                    {selectedAppointment.procedimento.nome}
+                    {selectedAppointment?.procedimento?.nome}
                   </Typography>
                   <Typography>
-                    Dentista: {selectedAppointment.dentista.nome}
+                    Dentista: {selectedAppointment?.dentista?.nome}
                   </Typography>
                   <Typography>
                     Horário:{" "}
                     {format(
-                      parseISO(selectedAppointment.data),
+                      parseISO(selectedAppointment.data_hora),
                       "dd/MM/yyyy HH:mm"
                     )}
                   </Typography>

@@ -7,7 +7,7 @@ import {
   Badge, Divider, CircularProgress, Button
 } from "@mui/material";
 import PatientForm from "../components/PatientForm";
-import Calendar from "../components/Calendar";
+import Calendar from "../components/CalendarSaaS";
 import Cashier from "./Cashier";
 import Settings from "../components/Settings";
 import AuthScreen from "../components/AuthScreen";
