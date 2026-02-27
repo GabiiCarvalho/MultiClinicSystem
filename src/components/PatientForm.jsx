@@ -1,522 +1,230 @@
-import { useState, useContext } from "react";
-import { ToastContainer, toast } from "react-toastify";
-import { PatientsContext } from "../contexts/PatientsContext";
+import { useState, useContext } from 'react';
 import {
-  TextField, Button, Typography, Box,
-  MenuItem, Paper, Container, Tabs, Tab,
-  Autocomplete, Grid
-} from "@mui/material";
-import { DatePicker, TimePicker } from '@mui/x-date-pickers';
-import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+  Box, Grid, TextField, Button, Typography, MenuItem, Paper,
+  Tabs, Tab, Autocomplete, Alert, Snackbar, Chip
+} from '@mui/material';
+import { PersonAdd, EventNote } from '@mui/icons-material';
+import { DatePicker, TimePicker, LocalizationProvider } from '@mui/x-date-pickers';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { ptBR } from 'date-fns/locale';
-import PhoneInput from 'react-phone-input-2';
-import 'react-phone-input-2/lib/style.css';
-import 'react-toastify/dist/ReactToastify.css';
+import { PatientsContext } from '../contexts/PatientsContext';
 
-const PatientForm = ({ onChangeTab }) => {
-  const { patients, setPatients, addPatient } = useContext(PatientsContext);
-  const [localTabValue, setLocalTabValue] = useState(0);
-  const [searchInput, setSearchInput] = useState("");
-  const [selectedPatient, setSelectedPatient] = useState(null);
+const PROCEDURES = {
+  'Consulta Odontológica': 150,
+  'Limpeza Dental': 200,
+  'Clareamento': 800,
+  'Extração': 350,
+  'Canal': 1200,
+  'Microcirurgia': 2500,
+  'Aplicação de Botox': 600,
+  'Preenchimento': 1200,
+  'Lipoaspiração': 5000,
+  'Rinoplastia': 8000,
+  'Blefaroplastia': 4000,
+  'Outros': 300,
+};
 
-  const [newPatientForm, setNewPatientForm] = useState({
-    name: "",
-    phone: "",
-    email: "",
-    cpf: "",
-    birthDate: null,
-    procedureType: "Consulta Odontológica",
-    dentist: "Dra. Ana Silva",
-    observations: "",
-    scheduleDate: new Date(),
-    scheduleTime: new Date()
-  });
+const DENTISTS = ['Dra. Ana Silva', 'Dr. Carlos Santos', 'Dra. Mariana Oliveira', 'Dr. Rafael Mendes', 'Dra. Juliana Costa'];
 
-  const [quickScheduleForm, setQuickScheduleForm] = useState({
-    procedureType: "Consulta Odontológica",
-    dentist: "Dra. Ana Silva",
+const defaultNewForm = () => ({
+  nome: '', telefone: '', email: '', cpf: '',
+  procedimento: 'Consulta Odontológica',
+  dentist: DENTISTS[0],
+  observations: '',
+  scheduleDate: new Date(),
+  scheduleTime: new Date(),
+});
+
+const PatientForm = ({ onNavigateToCashier }) => {
+  const { patients, addPatient } = useContext(PatientsContext);
+  const [tab, setTab] = useState(0);
+  const [form, setForm] = useState(defaultNewForm());
+  const [search, setSearch] = useState('');
+  const [selected, setSelected] = useState(null);
+  const [quickForm, setQuickForm] = useState({
+    procedimento: 'Consulta Odontológica',
+    dentist: DENTISTS[0],
     scheduleDate: new Date(),
     scheduleTime: new Date(),
-    observations: ""
+    observations: '',
   });
+  const [snack, setSnack] = useState({ open: false, msg: '', severity: 'success' });
 
-  const procedurePrices = {
-    "Consulta Odontológica": 150,
-    "Limpeza Dental": 200,
-    "Clareamento": 800,
-    "Extração": 350,
-    "Canal": 1200,
-    "Microcirurgia": 2500,
-    "Aplicação de Botox": 600,
-    "Preenchimento": 1200,
-    "Lipoaspiração": 5000,
-    "Rinoplastia": 8000,
-    "Blefaroplastia": 4000,
-    "Outros": 300
+  const show = (msg, severity = 'success') => setSnack({ open: true, msg, severity });
+  const set = (k, v) => setForm((p) => ({ ...p, [k]: v }));
+  const setQ = (k, v) => setQuickForm((p) => ({ ...p, [k]: v }));
+
+  const combinedDateTime = (date, time) => {
+    const d = new Date(date);
+    const t = new Date(time);
+    d.setHours(t.getHours(), t.getMinutes(), 0, 0);
+    return d;
   };
 
-  const procedureDescriptions = {
-    "Consulta Odontológica": "Avaliação inicial com dentista",
-    "Limpeza Dental": "Remoção de tártaro e profilaxia",
-    "Clareamento": "Clareamento dental a laser",
-    "Extração": "Extração de dente",
-    "Canal": "Tratamento de canal",
-    "Microcirurgia": "Procedimento cirúrgico minimamente invasivo",
-    "Aplicação de Botox": "Aplicação de toxina botulínica",
-    "Preenchimento": "Preenchimento facial com ácido hialurônico",
-    "Lipoaspiração": "Procedimento de lipoaspiração localizada",
-    "Rinoplastia": "Cirurgia plástica no nariz",
-    "Blefaroplastia": "Cirurgia das pálpebras",
-    "Outros": "Outros procedimentos"
-  };
-
-  const dentists = [
-    'Dra. Ana Silva',
-    'Dr. Carlos Santos',
-    'Dra. Mariana Oliveira',
-    'Dr. Rafael Mendes',
-    'Dra. Juliana Costa'
-  ];
-
-  const handleTabChange = (event, newValue) => {
-    setLocalTabValue(newValue);
-  };
-
-  const handleNewPatientSubmit = (e) => {
+  const handleNewSubmit = (e) => {
     e.preventDefault();
-
-    if (!newPatientForm.name || !newPatientForm.phone) {
-      toast.error("Preencha todos os campos obrigatórios!");
-      return;
-    }
-
-    // Combinar data e hora
-    const scheduleDateTime = new Date(newPatientForm.scheduleDate);
-    scheduleDateTime.setHours(
-      newPatientForm.scheduleTime.getHours(),
-      newPatientForm.scheduleTime.getMinutes()
-    );
-
-    const valor = procedurePrices[newPatientForm.procedureType] || 150;
-
-    const newPatient = {
-      id: Date.now(),
-      name: newPatientForm.name,
-      nome: newPatientForm.name,
-      phone: newPatientForm.phone,
-      telefone: newPatientForm.phone,
-      email: newPatientForm.email,
-      cpf: newPatientForm.cpf,
-      birthDate: newPatientForm.birthDate,
-      procedureType: newPatientForm.procedureType,
-      procedimento: newPatientForm.procedureType,
-      dentist: newPatientForm.dentist,
-      observations: newPatientForm.observations,
-      scheduleDate: scheduleDateTime,
-      inProcedure: false,
-      procedureProgress: 0,
-      completedToday: false,
+    if (!form.nome || !form.telefone) { show('Preencha Nome e Telefone', 'error'); return; }
+    const dt = combinedDateTime(form.scheduleDate, form.scheduleTime);
+    const patient = addPatient({
+      nome: form.nome, name: form.nome,
+      telefone: form.telefone, phone: form.telefone,
+      email: form.email, cpf: form.cpf,
+      procedimento: form.procedimento, procedureType: form.procedimento,
+      dentist: form.dentist,
+      observations: form.observations,
+      data_hora: dt.toISOString(),
+      scheduleDate: dt,
+      valor: PROCEDURES[form.procedimento] || 150,
       status: 'pendente_pagamento',
       pago: false,
-      valor: valor
-    };
-
-    // Adicionar ao contexto
-    addPatient(newPatient);
-
-    // Salvar no localStorage para o caixa pegar
-    localStorage.setItem('pendingPayment', JSON.stringify({
-      patient: {
-        id: newPatient.id,
-        name: newPatient.name,
-        nome: newPatient.nome,
-        phone: newPatient.phone,
-        telefone: newPatient.telefone
-      },
-      procedure: newPatientForm.procedureType,
-      valor: valor,
-      dentist: newPatientForm.dentist,
-      agendamento: newPatient
-    }));
-
-    toast.success("Paciente cadastrado! Redirecionando para o caixa...");
-    
-    // Limpar formulário
-    setNewPatientForm({
-      name: "",
-      phone: "",
-      email: "",
-      cpf: "",
-      birthDate: null,
-      procedureType: "Consulta Odontológica",
-      dentist: "Dra. Ana Silva",
-      observations: "",
-      scheduleDate: new Date(),
-      scheduleTime: new Date()
     });
-
-    // Redirecionar para a aba do caixa
-    setTimeout(() => {
-      if (onChangeTab) {
-        try {
-          onChangeTab(6); // Tenta índice 6 (caixa para gestor)
-        } catch {
-          onChangeTab(2); // Fallback para índice 2 (caixa para atendente)
-        }
-      } else {
-        console.error('onChangeTab não está disponível');
-        window.location.href = '/caixa'; // Fallback para rota
-      }
-    }, 2000);
+    localStorage.setItem('pendingPayment', JSON.stringify({ patient, procedure: form.procedimento, valor: PROCEDURES[form.procedimento] }));
+    show('Paciente cadastrado! Redirecionando para caixa...');
+    setForm(defaultNewForm());
+    setTimeout(() => onNavigateToCashier?.(), 1800);
   };
 
-  const handleQuickScheduleSubmit = (e) => {
+  const handleQuickSubmit = (e) => {
     e.preventDefault();
-    if (!selectedPatient) {
-      toast.error("Selecione um paciente para agendar o procedimento!");
-      return;
-    }
-
-    // Combinar data e hora
-    const scheduleDateTime = new Date(quickScheduleForm.scheduleDate);
-    scheduleDateTime.setHours(
-      quickScheduleForm.scheduleTime.getHours(),
-      quickScheduleForm.scheduleTime.getMinutes()
-    );
-
-    const valor = procedurePrices[quickScheduleForm.procedureType] || 150;
-
-    // Criar um agendamento pendente
-    const novoAgendamento = {
-      id: Date.now(),
-      patientId: selectedPatient.id,
-      patientName: selectedPatient.name || selectedPatient.nome,
-      patientPhone: selectedPatient.phone || selectedPatient.telefone,
-      name: selectedPatient.name || selectedPatient.nome,
-      nome: selectedPatient.name || selectedPatient.nome,
-      phone: selectedPatient.phone || selectedPatient.telefone,
-      telefone: selectedPatient.phone || selectedPatient.telefone,
-      email: selectedPatient.email,
-      procedureType: quickScheduleForm.procedureType,
-      procedimento: quickScheduleForm.procedureType,
-      dentist: quickScheduleForm.dentist,
-      scheduleDate: scheduleDateTime,
-      observations: quickScheduleForm.observations,
-      valor: valor,
+    if (!selected) { show('Selecione um paciente', 'error'); return; }
+    const dt = combinedDateTime(quickForm.scheduleDate, quickForm.scheduleTime);
+    const patient = addPatient({
+      ...selected,
+      procedimento: quickForm.procedimento, procedureType: quickForm.procedimento,
+      dentist: quickForm.dentist,
+      observations: quickForm.observations,
+      data_hora: dt.toISOString(),
+      scheduleDate: dt,
+      valor: PROCEDURES[quickForm.procedimento] || 150,
       status: 'pendente_pagamento',
       pago: false,
-      inProcedure: false,
-      procedureProgress: 0,
-      completedToday: false
-    };
-
-    // Adicionar ao contexto
-    addPatient(novoAgendamento);
-
-    // Salvar no localStorage para o caixa processar
-    localStorage.setItem('pendingPayment', JSON.stringify({
-      patient: {
-        id: selectedPatient.id,
-        name: selectedPatient.name || selectedPatient.nome,
-        nome: selectedPatient.name || selectedPatient.nome,
-        phone: selectedPatient.phone || selectedPatient.telefone,
-        telefone: selectedPatient.phone || selectedPatient.telefone
-      },
-      procedure: quickScheduleForm.procedureType,
-      valor: valor,
-      dentist: quickScheduleForm.dentist,
-      agendamento: novoAgendamento
-    }));
-
-    toast.info("Agendamento criado! Redirecionando para o caixa para pagamento");
-    
-    // Limpar formulário
-    setQuickScheduleForm({
-      procedureType: "Consulta Odontológica",
-      dentist: "Dra. Ana Silva",
-      scheduleDate: new Date(),
-      scheduleTime: new Date(),
-      observations: ""
+      id: undefined,
     });
-    setSelectedPatient(null);
-    setSearchInput("");
-
-    // Redirecionar para a aba do caixa
-    setTimeout(() => {
-      if (onChangeTab) {
-        try {
-          onChangeTab(6); // Tenta índice 6 (caixa para gestor)
-        } catch {
-          onChangeTab(2); // Fallback para índice 2 (caixa para atendente)
-        }
-      } else {
-        console.error('onChangeTab não está disponível');
-        window.location.href = '/caixa'; // Fallback para rota
-      }
-    }, 2000);
+    localStorage.setItem('pendingPayment', JSON.stringify({ patient, procedure: quickForm.procedimento, valor: PROCEDURES[quickForm.procedimento] }));
+    show('Agendamento criado! Redirecionando para caixa...');
+    setSelected(null); setSearch('');
+    setTimeout(() => onNavigateToCashier?.(), 1800);
   };
 
-  const filteredPatients = patients.filter(patient =>
-    (patient.name || '').toLowerCase().includes(searchInput.toLowerCase()) ||
-    (patient.phone || '').includes(searchInput)
+  const filteredPatients = patients.filter((p) =>
+    (p.nome || p.name || '').toLowerCase().includes(search.toLowerCase()) ||
+    (p.telefone || p.phone || '').includes(search)
   );
 
   return (
     <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={ptBR}>
-      <Container maxWidth="md">
-        <Paper sx={{ p: 3, mt: 4 }}>
-          <ToastContainer position="top-center" autoClose={3000} />
+      <Box>
+        <Typography variant="h5" sx={{ fontWeight: 700, mb: 2.5 }}>Cadastro de Pacientes</Typography>
 
-          <Tabs value={localTabValue} onChange={handleTabChange} variant="fullWidth" sx={{ mb: 3 }}>
-            <Tab label="Agendamento Rápido" />
-            <Tab label="Novo Cadastro" />
+        <Paper sx={{ mb: 3, borderRadius: 2 }}>
+          <Tabs value={tab} onChange={(_, v) => setTab(v)}>
+            <Tab icon={<EventNote />} iconPosition="start" label="Agendamento Rápido" sx={{ minHeight: 48 }} />
+            <Tab icon={<PersonAdd />} iconPosition="start" label="Novo Paciente" sx={{ minHeight: 48 }} />
           </Tabs>
+        </Paper>
 
-          {localTabValue === 0 ? (
-            <form onSubmit={handleQuickScheduleSubmit}>
-              <Typography variant="h6" gutterBottom sx={{ mb: 2 }}>
-                Agendamento para Paciente Cadastrado
-              </Typography>
-
-              <Autocomplete
-                options={filteredPatients}
-                getOptionLabel={(option) => `${option.name || option.nome} (${option.phone || option.telefone})`}
-                inputValue={searchInput}
-                onInputChange={(e, newValue) => setSearchInput(newValue)}
-                onChange={(e, newValue) => setSelectedPatient(newValue)}
-                renderInput={(params) => (
-                  <TextField {...params} label="Buscar paciente por nome ou telefone" fullWidth sx={{ mb: 2 }} />
-                )}
-                renderOption={(props, option) => (
-                  <Box component="li" {...props}>
-                    <Box>
-                      <Typography>{option.name || option.nome}</Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        {option.phone || option.telefone} • {option.email || 'Sem email'}
-                      </Typography>
-                    </Box>
-                  </Box>
-                )}
-              />
-
-              {selectedPatient && (
-                <Box sx={{ mb: 2, p: 2, backgroundColor: '#f5f5f5', borderRadius: 1 }}>
-                  <Typography variant="subtitle1" fontWeight="bold">
-                    {selectedPatient.name || selectedPatient.nome}
-                  </Typography>
-                  <Typography variant="body2">
-                    Telefone: {selectedPatient.phone || selectedPatient.telefone}
-                  </Typography>
-                  {selectedPatient.email && (
-                    <Typography variant="body2">
-                      Email: {selectedPatient.email}
-                    </Typography>
-                  )}
-                </Box>
-              )}
-
-              <TextField
-                select
-                label="Tipo de Procedimento"
-                fullWidth
-                value={quickScheduleForm.procedureType}
-                onChange={(e) => setQuickScheduleForm({ ...quickScheduleForm, procedureType: e.target.value })}
-                sx={{ mb: 2 }}
-              >
-                {Object.entries(procedurePrices).map(([procedure, price]) => (
-                  <MenuItem key={procedure} value={procedure}>
-                    {procedure} - R$ {price.toFixed(2)}
-                  </MenuItem>
-                ))}
-              </TextField>
-
-              <TextField
-                select
-                label="Dentista Responsável"
-                fullWidth
-                value={quickScheduleForm.dentist}
-                onChange={(e) => setQuickScheduleForm({ ...quickScheduleForm, dentist: e.target.value })}
-                sx={{ mb: 2 }}
-              >
-                {dentists.map((dentist) => (
-                  <MenuItem key={dentist} value={dentist}>
-                    {dentist}
-                  </MenuItem>
-                ))}
-              </TextField>
-
-              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2, mb: 2 }}>
-                <DatePicker
-                  label="Data do Procedimento"
-                  value={quickScheduleForm.scheduleDate}
-                  onChange={(newDate) => setQuickScheduleForm({ ...quickScheduleForm, scheduleDate: newDate })}
-                  slotProps={{ textField: { fullWidth: true } }}
-                  minDate={new Date()}
-                  format="dd/MM/yyyy"
-                />
-                <TimePicker
-                  label="Horário do Procedimento"
-                  value={quickScheduleForm.scheduleTime}
-                  onChange={(newTime) => setQuickScheduleForm({ ...quickScheduleForm, scheduleTime: newTime })}
-                  slotProps={{ textField: { fullWidth: true } }}
-                />
-              </Box>
-
-              <TextField
-                label="Observações"
-                fullWidth
-                multiline
-                rows={2}
-                value={quickScheduleForm.observations}
-                onChange={(e) => setQuickScheduleForm({ ...quickScheduleForm, observations: e.target.value })}
-                sx={{ mb: 2 }}
-              />
-
-              <Button
-                type="submit"
-                variant="contained"
-                size="large"
-                fullWidth
-                disabled={!selectedPatient}
-                sx={{ py: 1.5 }}
-              >
-                AGENDAR PROCEDIMENTO
-              </Button>
-            </form>
-          ) : (
-            <form onSubmit={handleNewPatientSubmit}>
-              <Typography variant="h6" gutterBottom sx={{ mb: 2 }}>
-                Cadastrar Novo Paciente
-              </Typography>
-
+        {tab === 0 && (
+          <Paper sx={{ p: { xs: 2, sm: 3 }, borderRadius: 3 }}>
+            <Typography variant="h6" fontWeight={600} mb={2}>Agendar para paciente existente</Typography>
+            <form onSubmit={handleQuickSubmit}>
               <Grid container spacing={2}>
                 <Grid item xs={12}>
-                  <TextField
-                    label="Nome Completo *"
-                    fullWidth
-                    required
-                    value={newPatientForm.name}
-                    onChange={(e) => setNewPatientForm({ ...newPatientForm, name: e.target.value })}
+                  <Autocomplete
+                    options={filteredPatients}
+                    getOptionLabel={(o) => `${o.nome || o.name} — ${o.telefone || o.phone}`}
+                    inputValue={search}
+                    onInputChange={(_, v) => setSearch(v)}
+                    onChange={(_, v) => setSelected(v)}
+                    renderInput={(params) => <TextField {...params} label="Buscar paciente" fullWidth />}
                   />
                 </Grid>
-
+                {selected && (
+                  <Grid item xs={12}>
+                    <Box sx={{ p: 1.5, bgcolor: '#F0FDF4', borderRadius: 2, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                      <Chip label={selected.nome || selected.name} sx={{ fontWeight: 600 }} />
+                      <Chip label={selected.telefone || selected.phone} variant="outlined" />
+                    </Box>
+                  </Grid>
+                )}
                 <Grid item xs={12} sm={6}>
-                  <PhoneInput
-                    country={'br'}
-                    value={newPatientForm.phone}
-                    onChange={(phone) => setNewPatientForm({ ...newPatientForm, phone })}
-                    inputStyle={{ width: '100%' }}
-                    placeholder="Telefone *"
-                  />
-                </Grid>
-
-                <Grid item xs={12} sm={6}>
-                  <TextField
-                    label="Email"
-                    type="email"
-                    fullWidth
-                    value={newPatientForm.email}
-                    onChange={(e) => setNewPatientForm({ ...newPatientForm, email: e.target.value })}
-                  />
-                </Grid>
-
-                <Grid item xs={12} sm={6}>
-                  <TextField
-                    label="CPF"
-                    fullWidth
-                    value={newPatientForm.cpf}
-                    onChange={(e) => setNewPatientForm({ ...newPatientForm, cpf: e.target.value })}
-                  />
-                </Grid>
-
-                <Grid item xs={12} sm={6}>
-                  <DatePicker
-                    label="Data de Nascimento"
-                    value={newPatientForm.birthDate}
-                    onChange={(newDate) => setNewPatientForm({ ...newPatientForm, birthDate: newDate })}
-                    slotProps={{ textField: { fullWidth: true } }}
-                    format="dd/MM/yyyy"
-                  />
-                </Grid>
-
-                <Grid item xs={12} sm={6}>
-                  <TextField
-                    select
-                    label="Tipo de Procedimento"
-                    fullWidth
-                    value={newPatientForm.procedureType}
-                    onChange={(e) => setNewPatientForm({ ...newPatientForm, procedureType: e.target.value })}
-                  >
-                    {Object.entries(procedurePrices).map(([procedure, price]) => (
-                      <MenuItem key={procedure} value={procedure}>
-                        {procedure} - R$ {price.toFixed(2)}
-                      </MenuItem>
-                    ))}
+                  <TextField select fullWidth label="Procedimento" value={quickForm.procedimento} onChange={(e) => setQ('procedimento', e.target.value)}>
+                    {Object.entries(PROCEDURES).map(([k, v]) => <MenuItem key={k} value={k}>{k} — R$ {v}</MenuItem>)}
                   </TextField>
                 </Grid>
-
                 <Grid item xs={12} sm={6}>
-                  <TextField
-                    select
-                    label="Dentista Responsável"
-                    fullWidth
-                    value={newPatientForm.dentist}
-                    onChange={(e) => setNewPatientForm({ ...newPatientForm, dentist: e.target.value })}
-                  >
-                    {dentists.map((dentist) => (
-                      <MenuItem key={dentist} value={dentist}>
-                        {dentist}
-                      </MenuItem>
-                    ))}
+                  <TextField select fullWidth label="Dentista" value={quickForm.dentist} onChange={(e) => setQ('dentist', e.target.value)}>
+                    {DENTISTS.map((d) => <MenuItem key={d} value={d}>{d}</MenuItem>)}
                   </TextField>
                 </Grid>
-
                 <Grid item xs={12} sm={6}>
-                  <DatePicker
-                    label="Data do Procedimento"
-                    value={newPatientForm.scheduleDate}
-                    onChange={(newDate) => setNewPatientForm({ ...newPatientForm, scheduleDate: newDate })}
-                    slotProps={{ textField: { fullWidth: true } }}
-                    minDate={new Date()}
-                    format="dd/MM/yyyy"
-                  />
+                  <DatePicker label="Data" value={quickForm.scheduleDate} onChange={(v) => setQ('scheduleDate', v)} slotProps={{ textField: { fullWidth: true, size: 'small' } }} minDate={new Date()} format="dd/MM/yyyy" />
                 </Grid>
-
                 <Grid item xs={12} sm={6}>
-                  <TimePicker
-                    label="Horário do Procedimento"
-                    value={newPatientForm.scheduleTime}
-                    onChange={(newTime) => setNewPatientForm({ ...newPatientForm, scheduleTime: newTime })}
-                    slotProps={{ textField: { fullWidth: true } }}
-                  />
+                  <TimePicker label="Horário" value={quickForm.scheduleTime} onChange={(v) => setQ('scheduleTime', v)} slotProps={{ textField: { fullWidth: true, size: 'small' } }} />
                 </Grid>
-
                 <Grid item xs={12}>
-                  <TextField
-                    label="Observações"
-                    fullWidth
-                    multiline
-                    rows={3}
-                    value={newPatientForm.observations}
-                    onChange={(e) => setNewPatientForm({ ...newPatientForm, observations: e.target.value })}
-                  />
+                  <TextField fullWidth multiline rows={2} label="Observações" value={quickForm.observations} onChange={(e) => setQ('observations', e.target.value)} />
+                </Grid>
+                <Grid item xs={12}>
+                  <Button type="submit" variant="contained" size="large" fullWidth disabled={!selected}>
+                    Agendar Procedimento — R$ {PROCEDURES[quickForm.procedimento]}
+                  </Button>
                 </Grid>
               </Grid>
-
-              <Button
-                type="submit"
-                variant="contained"
-                size="large"
-                fullWidth
-                sx={{ mt: 3, py: 1.5 }}
-              >
-                CADASTRAR PACIENTE
-              </Button>
             </form>
-          )}
-        </Paper>
-      </Container>
+          </Paper>
+        )}
+
+        {tab === 1 && (
+          <Paper sx={{ p: { xs: 2, sm: 3 }, borderRadius: 3 }}>
+            <Typography variant="h6" fontWeight={600} mb={2}>Cadastrar novo paciente</Typography>
+            <form onSubmit={handleNewSubmit}>
+              <Grid container spacing={2}>
+                <Grid item xs={12} sm={6}>
+                  <TextField fullWidth required label="Nome Completo *" value={form.nome} onChange={(e) => set('nome', e.target.value)} />
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <TextField fullWidth required label="Telefone *" value={form.telefone} onChange={(e) => set('telefone', e.target.value)} placeholder="(00) 00000-0000" />
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <TextField fullWidth label="Email" type="email" value={form.email} onChange={(e) => set('email', e.target.value)} />
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <TextField fullWidth label="CPF" value={form.cpf} onChange={(e) => set('cpf', e.target.value)} placeholder="000.000.000-00" />
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <TextField select fullWidth label="Procedimento" value={form.procedimento} onChange={(e) => set('procedimento', e.target.value)}>
+                    {Object.entries(PROCEDURES).map(([k, v]) => <MenuItem key={k} value={k}>{k} — R$ {v}</MenuItem>)}
+                  </TextField>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <TextField select fullWidth label="Dentista" value={form.dentist} onChange={(e) => set('dentist', e.target.value)}>
+                    {DENTISTS.map((d) => <MenuItem key={d} value={d}>{d}</MenuItem>)}
+                  </TextField>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <DatePicker label="Data" value={form.scheduleDate} onChange={(v) => set('scheduleDate', v)} slotProps={{ textField: { fullWidth: true, size: 'small' } }} minDate={new Date()} format="dd/MM/yyyy" />
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <TimePicker label="Horário" value={form.scheduleTime} onChange={(v) => set('scheduleTime', v)} slotProps={{ textField: { fullWidth: true, size: 'small' } }} />
+                </Grid>
+                <Grid item xs={12}>
+                  <TextField fullWidth multiline rows={3} label="Observações" value={form.observations} onChange={(e) => set('observations', e.target.value)} />
+                </Grid>
+                <Grid item xs={12}>
+                  <Button type="submit" variant="contained" size="large" fullWidth>
+                    Cadastrar — R$ {PROCEDURES[form.procedimento]}
+                  </Button>
+                </Grid>
+              </Grid>
+            </form>
+          </Paper>
+        )}
+      </Box>
+
+      <Snackbar open={snack.open} autoHideDuration={3000} onClose={() => setSnack((s) => ({ ...s, open: false }))}>
+        <Alert severity={snack.severity} sx={{ borderRadius: 2 }}>{snack.msg}</Alert>
+      </Snackbar>
     </LocalizationProvider>
   );
 };

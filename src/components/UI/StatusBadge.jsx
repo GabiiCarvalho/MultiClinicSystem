@@ -1,75 +1,25 @@
 import { Chip } from '@mui/material';
-import { styled } from '@mui/material/styles';
 
-const statusStyles = {
-  agendado: {
-    bg: '#FFF0D9',
-    color: '#B87C4A',
-    label: '📅 Agendado',
-  },
-  confirmado: {
-    bg: '#D4E6F1',
-    color: '#4A7B8C',
-    label: '✅ Confirmado',
-  },
-  em_andamento: {
-    bg: '#F9D7D7',
-    color: '#A65D5D',
-    label: '⏳ Em Andamento',
-  },
-  em_procedimento: {
-    bg: '#F9D7D7',
-    color: '#A65D5D',
-    label: '⚕️ Em Procedimento',
-  },
-  concluido: {
-    bg: '#C5E0C5',
-    color: '#4F7A4F',
-    label: '🎉 Concluído',
-  },
-  finalizado: {
-    bg: '#C5E0C5',
-    color: '#4F7A4F',
-    label: '✨ Finalizado',
-  },
-  cancelado: {
-    bg: '#FFC9C9',
-    color: '#A65D5D',
-    label: '❌ Cancelado',
-  },
+const STATUS_MAP = {
+  pendente_pagamento: { bg: '#FFF3D0', color: '#B5742E', label: '💰 Aguardando Pgto' },
+  agendado:           { bg: '#D0E8FF', color: '#2E6BB5', label: '📅 Agendado' },
+  confirmado:         { bg: '#D0F5E8', color: '#2E855E', label: '✅ Confirmado' },
+  em_procedimento:    { bg: '#FFE0D0', color: '#B53E2E', label: '⚕️ Em Procedimento' },
+  finalizado:         { bg: '#D0F5E8', color: '#2E855E', label: '✨ Finalizado' },
+  cancelado:          { bg: '#F0F0F0', color: '#666', label: '❌ Cancelado' },
 };
 
-const StyledChip = styled(Chip)(({ bgcolor, textcolor }) => ({
-  backgroundColor: bgcolor,
-  color: textcolor,
-  fontWeight: 500,
-  borderRadius: 30,
-  padding: '4px 8px',
-  fontSize: '0.85rem',
-  '& .MuiChip-label': {
-    padding: '0 8px',
-  },
-  '& .MuiChip-icon': {
-    color: textcolor,
-    fontSize: '1.1rem',
-    marginLeft: 8,
-  },
-}));
-
-export const StatusBadge = ({ status }) => {
-  const normalized = status?.toLowerCase();
-  const style = statusStyles[normalized] || {
-    bg: "#E2E8F0",
-    color: "#4A5568",
-    label: normalized || "Status",
-  };
-
+export const StatusBadge = ({ status, size = 'small' }) => {
+  const s = STATUS_MAP[status] || { bg: '#F0F0F0', color: '#666', label: status };
   return (
-    <StyledChip
-      bgcolor={style.bg}
-      textcolor={style.color}
-      label={style.label}
-      size="small"
+    <Chip
+      label={s.label}
+      size={size}
+      sx={{
+        bgcolor: s.bg, color: s.color, fontWeight: 600,
+        fontSize: size === 'small' ? '0.72rem' : '0.8rem',
+        borderRadius: 2, border: 'none',
+      }}
     />
   );
 };

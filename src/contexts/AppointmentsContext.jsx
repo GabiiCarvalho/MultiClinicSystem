@@ -1,5 +1,5 @@
-import { createContext, useState, useCallback } from "react";
-import axios from "axios";
+import { createContext, useState, useCallback } from 'react';
+import api from '../services/api';
 
 const AppointmentsContext = createContext();
 export default AppointmentsContext;
@@ -8,139 +8,65 @@ export const AppointmentsProvider = ({ children }) => {
   const [appointments, setAppointments] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  const API_URL = "http://localhost:3000/api";
-
-  const getAuthConfig = () => {
-    const token = localStorage.getItem("token");
-
-    return {
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
-    };
-  };
-
-  /**
-   * Buscar agendamentos por data
-   */
   const fetchAppointmentsByDate = useCallback(async (date) => {
+    setLoading(true);
     try {
-      setLoading(true);
-
-      const formattedDate = new Date(date).toISOString().split("T")[0];
-
-      const response = await axios.get(
-        `${API_URL}/agendamentos?data=${formattedDate}`,
-        getAuthConfig()
-      );
-
-      setAppointments(response.data);
-    } catch (error) {
-      console.error("Erro ao buscar agendamentos:", error);
+      const d = new Date(date).toISOString().split('T')[0];
+      const res = await api.get(`/agendamentos?data=${d}`);
+      setAppointments(Array.isArray(res.data) ? res.data : []);
+    } catch {
+      setAppointments([]);
     } finally {
       setLoading(false);
     }
   }, []);
 
-  /**
-   * Atualizar status
-   */
-  const updateAppointmentStatus = async (id, status) => {
+  const updateAppointmentStatus = useCallback(async (id, status) => {
     try {
-      await axios.patch(
-        `${API_URL}/agendamentos/${id}/status`,
-        { status },
-        getAuthConfig()
-      );
-
-      setAppointments((prev) =>
-        prev.map((appointment) =>
-          appointment.id === id
-            ? { ...appointment, status }
-            : appointment
-        )
-      );
-    } catch (error) {
-      console.error("Erro ao atualizar status:", error);
+      await api.patch(`/agendamentos/${id}/status`, { status });
+      setAppointments((prev) => prev.map((a) => a.id === id ? { ...a, status } : a));
+    } catch (e) {
+      console.error(e);
     }
-  };
+  }, []);
 
-  /**
-   * Atualizar data/hora (drag & drop)
-   */
-  const updateAppointmentDate = async (id, newDate) => {
+  const updateAppointmentDate = useCallback(async (id, newDate) => {
     try {
       const inicio = new Date(newDate);
-      const fim = new Date(inicio.getTime() + 60 * 60000); // +1h
-
-      await axios.patch(
-        `${API_URL}/agendamentos/${id}/data`,
-        {
-          data_hora: inicio,
-          data_hora_fim: fim
-        },
-        getAuthConfig()
-      );
-
-      setAppointments((prev) =>
-        prev.map((appointment) =>
-          appointment.id === id
-            ? { ...appointment, data_hora: inicio }
-            : appointment
-        )
-      );
-    } catch (error) {
-      console.error("Erro ao atualizar data:", error);
+      const fim = new Date(inicio.getTime() + 60 * 60000);
+      await api.patch(`/agendamentos/${id}/data`, { data_hora: inicio, data_hora_fim: fim });
+      setAppointments((prev) => prev.map((a) => a.id === id ? { ...a, data_hora: inicio.toISOString() } : a));
+    } catch (e) {
+      console.error(e);
     }
-  };
+  }, []);
 
-  /**
-   * Criar agendamento
-   */
-  const createAppointment = async (appointmentData) => {
+  const createAppointment = useCallback(async (data) => {
     try {
-      const response = await axios.post(
-        `${API_URL}/agendamentos`,
-        appointmentData,
-        getAuthConfig()
-      );
-
-      setAppointments((prev) => [...prev, response.data]);
-    } catch (error) {
-      console.error("Erro ao criar agendamento:", error);
+      const res = await api.post('/agendamentos', data);
+      setAppointments((prev) => [...prev, res.data]);
+      return res.data;
+    } catch (e) {
+      console.error(e);
+      throw e;
     }
-  };
+  }, []);
 
-  /**
-   * Deletar agendamento
-   */
-  const deleteAppointment = async (id) => {
+  const deleteAppointment = useCallback(async (id) => {
     try {
-      await axios.delete(
-        `${API_URL}/agendamentos/${id}`,
-        getAuthConfig()
-      );
-
-      setAppointments((prev) =>
-        prev.filter((appointment) => appointment.id !== id)
-      );
-    } catch (error) {
-      console.error("Erro ao deletar agendamento:", error);
+      await api.delete(`/agendamentos/${id}`);
+      setAppointments((prev) => prev.filter((a) => a.id !== id));
+    } catch (e) {
+      console.error(e);
     }
-  };
+  }, []);
 
   return (
-    <AppointmentsContext.Provider
-      value={{
-        appointments,
-        loading,
-        fetchAppointmentsByDate,
-        updateAppointmentStatus,
-        updateAppointmentDate,
-        createAppointment,
-        deleteAppointment
-      }}
-    >
+    <AppointmentsContext.Provider value={{
+      appointments, loading,
+      fetchAppointmentsByDate, updateAppointmentStatus,
+      updateAppointmentDate, createAppointment, deleteAppointment,
+    }}>
       {children}
     </AppointmentsContext.Provider>
   );
