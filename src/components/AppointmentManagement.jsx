@@ -1,285 +1,230 @@
-import { useState, useContext, useEffect } from 'react';
-import { AppointmentsContext } from '../contexts/AppointmentsContext';
+import { useState, useContext, useMemo } from 'react';
 import {
-  Box,
-  Typography,
-  Grid,
-  Card,
-  CardContent,
-  Chip,
-  Avatar,
-  Button,
-  TextField,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  IconButton,
-  Tooltip,
-  Alert,
-  Snackbar,
-  Stack,
-  CircularProgress,
-  InputAdornment
+  Box, Typography, Paper, Table, TableBody, TableCell, TableContainer,
+  TableHead, TableRow, Chip, IconButton, Button, TextField, InputAdornment,
+  Dialog, DialogTitle, DialogContent, DialogActions, MenuItem, Grid,
+  Avatar, Tooltip, Divider, CircularProgress
 } from '@mui/material';
+import {
+  Search, WhatsApp, Phone, CheckCircle, Cancel, Edit,
+  Add, EventNote, FilterList
+} from '@mui/icons-material';
+import { PatientsContext } from '../contexts/PatientsContext';
+import { AuthContext } from '../contexts/AuthContext';
+import { StatusBadge } from './UI/StatusBadge';
 
-import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
-import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
-import { ptBR } from 'date-fns/locale';
-import { format, parseISO } from 'date-fns';
-
-import PhoneIcon from '@mui/icons-material/Phone';
-import WhatsAppIcon from '@mui/icons-material/WhatsApp';
-import EmailIcon from '@mui/icons-material/Email';
-import EventIcon from '@mui/icons-material/Event';
-import CancelIcon from '@mui/icons-material/Cancel';
-import CheckCircleIcon from '@mui/icons-material/CheckCircle';
-import SearchIcon from '@mui/icons-material/Search';
+const STATUS_OPTIONS = [
+  { value: 'todos', label: 'Todos' },
+  { value: 'pendente_pagamento', label: 'Aguard. Pagamento' },
+  { value: 'agendado', label: 'Agendado' },
+  { value: 'em_procedimento', label: 'Em Procedimento' },
+  { value: 'finalizado', label: 'Finalizado' },
+  { value: 'cancelado', label: 'Cancelado' },
+];
 
 const AppointmentManagement = () => {
-  const {
-    appointments,
-    loading,
-    fetchAppointmentsByDate,
-    updateAppointmentStatus
-  } = useContext(AppointmentsContext);
+  const { patients, updatePatientStatus, loading } = useContext(PatientsContext);
+  const { user } = useContext(AuthContext);
+  const [search, setSearch] = useState('');
+  const [filterStatus, setFilterStatus] = useState('todos');
+  const [cancelDialog, setCancelDialog] = useState({ open: false, patient: null, reason: '' });
+  const [confirmDialog, setConfirmDialog] = useState({ open: false, patient: null });
 
-  const [selectedDate, setSelectedDate] = useState(new Date());
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedAppointment, setSelectedAppointment] = useState(null);
-  const [openCancelDialog, setOpenCancelDialog] = useState(false);
-  const [cancelReason, setCancelReason] = useState('');
-  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+  const canManage = ['gestor', 'proprietario', 'atendente'].includes(user?.cargo);
 
-  useEffect(() => {
-    fetchAppointmentsByDate(selectedDate);
-  }, [selectedDate]);
-
-  const handleConfirm = async (appointment) => {
-    await updateAppointmentStatus(appointment.id, 'confirmado');
-    setSnackbar({
-      open: true,
-      message: `Consulta confirmada para ${appointment.paciente.nome}`,
-      severity: 'success'
+  const filtered = useMemo(() => {
+    return patients.filter(p => {
+      const nome = (p.nome || p.name || '').toLowerCase();
+      const tel = p.telefone || p.phone || '';
+      const matchSearch = !search || nome.includes(search.toLowerCase()) || tel.includes(search);
+      const matchStatus = filterStatus === 'todos' || p.status === filterStatus;
+      return matchSearch && matchStatus;
     });
+  }, [patients, search, filterStatus]);
+
+  const handleConfirm = (patient) => {
+    updatePatientStatus(patient.id, 'agendado');
+    setConfirmDialog({ open: false, patient: null });
   };
 
-  const handleCancel = async () => {
-    if (!selectedAppointment) return;
-
-    await updateAppointmentStatus(
-      selectedAppointment.id,
-      'cancelado',
-      cancelReason
-    );
-
-    setOpenCancelDialog(false);
-    setCancelReason('');
-    setSnackbar({
-      open: true,
-      message: 'Agendamento cancelado com sucesso',
-      severity: 'warning'
-    });
+  const handleCancel = () => {
+    if (cancelDialog.patient) {
+      updatePatientStatus(cancelDialog.patient.id, 'cancelado', cancelDialog.reason);
+    }
+    setCancelDialog({ open: false, patient: null, reason: '' });
   };
 
-  const handleContact = (appointment, method) => {
-    const { telefone, email } = appointment.paciente;
-
-    if (method === 'phone' && telefone)
-      window.location.href = `tel:${telefone}`;
-
-    if (method === 'whatsapp' && telefone)
-      window.open(`https://wa.me/${telefone.replace(/\D/g, '')}`, '_blank');
-
-    if (method === 'email' && email)
-      window.location.href = `mailto:${email}`;
+  const openWhatsApp = (patient) => {
+    const phone = (patient.telefone || patient.phone || '').replace(/\D/g, '');
+    if (!phone) return;
+    const msg = encodeURIComponent(
+      `Olá ${patient.nome || patient.name}! Confirmamos seu agendamento para ${patient.procedimento || patient.procedureType || 'procedimento'} com ${patient.dentist || 'nosso profissional'}. Até breve!`
+    );
+    window.open(`https://wa.me/55${phone}?text=${msg}`, '_blank');
   };
 
-  const filteredAppointments = appointments.filter((a) => {
-    if (!searchTerm) return true;
-    const term = searchTerm.toLowerCase();
-
-    return (
-      a.paciente.nome.toLowerCase().includes(term) ||
-      a.paciente.telefone?.includes(term) ||
-      a.paciente.email?.toLowerCase().includes(term)
-    );
-  });
-
-  if (loading) {
-    return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', mt: 8 }}>
-        <CircularProgress />
-      </Box>
-    );
-  }
+  if (loading) return (
+    <Box sx={{ display: 'flex', justifyContent: 'center', mt: 8 }}>
+      <CircularProgress />
+    </Box>
+  );
 
   return (
-    <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={ptBR}>
-      <Box>
+    <Box>
+      <Typography variant="h5" fontWeight={700} sx={{ mb: 2.5 }}>
+        Agendamentos
+      </Typography>
 
-        {/* HEADER */}
-        <Box sx={{ mb: 4 }}>
-          <Typography variant="h4" fontWeight={600}>
-            Gestão de Agendamentos
-          </Typography>
-        </Box>
-
-        {/* DATA + BUSCA */}
-        <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} mb={4}>
-          <DatePicker
-            label="Selecionar Data"
-            value={selectedDate}
-            onChange={(date) => setSelectedDate(date)}
-            format="dd/MM/yyyy"
-          />
-
-          <TextField
-            placeholder="Buscar paciente..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchIcon />
-                </InputAdornment>
-              )
-            }}
-          />
-        </Stack>
-
-        {/* LISTA */}
-        <Grid container spacing={3}>
-          {filteredAppointments.length === 0 && (
-            <Grid item xs={12}>
-              <Typography>Nenhum agendamento encontrado.</Typography>
-            </Grid>
-          )}
-
-          {filteredAppointments.map((appointment) => (
-            <Grid item xs={12} key={appointment.id}>
-              <Card sx={{ borderRadius: 4 }}>
-                <CardContent>
-
-                  <Stack
-                    direction={{ xs: 'column', md: 'row' }}
-                    justifyContent="space-between"
-                    spacing={2}
-                  >
-                    {/* INFO PACIENTE */}
-                    <Stack direction="row" spacing={2} alignItems="center">
-                      <Avatar>
-                        {appointment.paciente.nome.charAt(0)}
-                      </Avatar>
-
-                      <Box>
-                        <Typography fontWeight={600}>
-                          {appointment.paciente.nome}
-                        </Typography>
-
-                        <Typography variant="body2">
-                          {appointment.procedimento.nome}
-                        </Typography>
-
-                        <Typography variant="caption">
-                          Dentista: {appointment.dentista.nome}
-                        </Typography>
-                      </Box>
-                    </Stack>
-
-                    {/* HORÁRIO + AÇÕES */}
-                    <Stack direction="row" spacing={1} alignItems="center">
-
-                      <Chip
-                        icon={<EventIcon />}
-                        label={format(parseISO(appointment.data), "HH:mm")}
-                      />
-
-                      {appointment.payment_status === 'pago' && (
-                        <Chip
-                          label="Pago"
-                          color="success"
-                          size="small"
-                        />
-                      )}
-
-                      <Tooltip title="Ligar">
-                        <IconButton onClick={() => handleContact(appointment, 'phone')}>
-                          <PhoneIcon />
-                        </IconButton>
-                      </Tooltip>
-
-                      <Tooltip title="WhatsApp">
-                        <IconButton onClick={() => handleContact(appointment, 'whatsapp')}>
-                          <WhatsAppIcon />
-                        </IconButton>
-                      </Tooltip>
-
-                      <Tooltip title="Confirmar">
-                        <IconButton
-                          onClick={() => handleConfirm(appointment)}
-                          color="success"
-                        >
-                          <CheckCircleIcon />
-                        </IconButton>
-                      </Tooltip>
-
-                      <Tooltip title="Cancelar">
-                        <IconButton
-                          color="error"
-                          onClick={() => {
-                            setSelectedAppointment(appointment);
-                            setOpenCancelDialog(true);
-                          }}
-                        >
-                          <CancelIcon />
-                        </IconButton>
-                      </Tooltip>
-
-                    </Stack>
-                  </Stack>
-
-                </CardContent>
-              </Card>
-            </Grid>
-          ))}
-        </Grid>
-
-        {/* CANCELAMENTO */}
-        <Dialog open={openCancelDialog} onClose={() => setOpenCancelDialog(false)}>
-          <DialogTitle>Cancelar Agendamento</DialogTitle>
-          <DialogContent>
+      {/* Filtros */}
+      <Paper sx={{ p: 2, mb: 2, borderRadius: 2 }}>
+        <Grid container spacing={2} alignItems="center">
+          <Grid item xs={12} sm={6} md={5}>
             <TextField
               fullWidth
-              multiline
-              rows={3}
-              label="Motivo"
-              value={cancelReason}
-              onChange={(e) => setCancelReason(e.target.value)}
-              sx={{ mt: 2 }}
+              placeholder="Buscar por nome ou telefone..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              InputProps={{
+                startAdornment: <InputAdornment position="start"><Search sx={{ color: 'text.disabled' }} /></InputAdornment>,
+              }}
             />
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setOpenCancelDialog(false)}>Voltar</Button>
-            <Button color="error" variant="contained" onClick={handleCancel}>
-              Confirmar Cancelamento
-            </Button>
-          </DialogActions>
-        </Dialog>
+          </Grid>
+          <Grid item xs={12} sm={6} md={4}>
+            <TextField
+              select fullWidth label="Filtrar por status"
+              value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
+              InputProps={{ startAdornment: <InputAdornment position="start"><FilterList sx={{ color: 'text.disabled' }} /></InputAdornment> }}
+            >
+              {STATUS_OPTIONS.map(o => <MenuItem key={o.value} value={o.value}>{o.label}</MenuItem>)}
+            </TextField>
+          </Grid>
+          <Grid item xs={12} md={3}>
+            <Typography variant="body2" color="text.secondary">
+              <b>{filtered.length}</b> agendamento{filtered.length !== 1 ? 's' : ''} encontrado{filtered.length !== 1 ? 's' : ''}
+            </Typography>
+          </Grid>
+        </Grid>
+      </Paper>
 
-        {/* SNACKBAR */}
-        <Snackbar
-          open={snackbar.open}
-          autoHideDuration={4000}
-          onClose={() => setSnackbar({ ...snackbar, open: false })}
-        >
-          <Alert severity={snackbar.severity}>
-            {snackbar.message}
-          </Alert>
-        </Snackbar>
+      {/* Tabela */}
+      <Paper sx={{ borderRadius: 3, overflow: 'hidden' }}>
+        <TableContainer>
+          <Table>
+            <TableHead>
+              <TableRow sx={{ bgcolor: '#F8FAFC' }}>
+                <TableCell sx={{ fontWeight: 700 }}>Paciente</TableCell>
+                <TableCell sx={{ fontWeight: 700, display: { xs: 'none', sm: 'table-cell' } }}>Procedimento</TableCell>
+                <TableCell sx={{ fontWeight: 700, display: { xs: 'none', md: 'table-cell' } }}>Dentista</TableCell>
+                <TableCell sx={{ fontWeight: 700, display: { xs: 'none', md: 'table-cell' } }}>Valor</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Status</TableCell>
+                {canManage && <TableCell sx={{ fontWeight: 700 }} align="right">Ações</TableCell>}
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {filtered.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={6} align="center" sx={{ py: 6 }}>
+                    <EventNote sx={{ fontSize: 40, color: 'text.disabled', mb: 1 }} />
+                    <Typography variant="body2" color="text.secondary">Nenhum agendamento encontrado</Typography>
+                  </TableCell>
+                </TableRow>
+              ) : filtered.map(p => (
+                <TableRow key={p.id} hover>
+                  <TableCell>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                      <Avatar sx={{ width: 36, height: 36, bgcolor: '#EDE9FE', color: '#7C3AED', fontWeight: 700, fontSize: '0.9rem' }}>
+                        {(p.nome || p.name || '?').charAt(0)}
+                      </Avatar>
+                      <Box>
+                        <Typography variant="body2" fontWeight={600}>{p.nome || p.name}</Typography>
+                        <Typography variant="caption" color="text.secondary">{p.telefone || p.phone}</Typography>
+                      </Box>
+                    </Box>
+                  </TableCell>
+                  <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>
+                    <Typography variant="body2">{p.procedimento || p.procedureType || '—'}</Typography>
+                  </TableCell>
+                  <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>
+                    <Typography variant="body2">{p.dentist || p.dentista || '—'}</Typography>
+                  </TableCell>
+                  <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>
+                    {p.valor ? (
+                      <Chip label={`R$ ${Number(p.valor).toFixed(0)}`} size="small"
+                        sx={{ bgcolor: '#F0FDF4', color: '#059669', fontWeight: 700 }} />
+                    ) : '—'}
+                  </TableCell>
+                  <TableCell>
+                    <StatusBadge status={p.status} />
+                  </TableCell>
+                  {canManage && (
+                    <TableCell align="right">
+                      <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'flex-end' }}>
+                        <Tooltip title="WhatsApp">
+                          <IconButton size="small" onClick={() => openWhatsApp(p)} sx={{ color: '#25D366' }}>
+                            <WhatsApp sx={{ fontSize: 18 }} />
+                          </IconButton>
+                        </Tooltip>
+                        {p.status === 'pendente_pagamento' && (
+                          <Tooltip title="Confirmar como agendado">
+                            <IconButton size="small" onClick={() => setConfirmDialog({ open: true, patient: p })}
+                              sx={{ color: '#059669' }}>
+                              <CheckCircle sx={{ fontSize: 18 }} />
+                            </IconButton>
+                          </Tooltip>
+                        )}
+                        {['agendado', 'pendente_pagamento'].includes(p.status) && (
+                          <Tooltip title="Cancelar">
+                            <IconButton size="small"
+                              onClick={() => setCancelDialog({ open: true, patient: p, reason: '' })}
+                              sx={{ color: '#DC2626' }}>
+                              <Cancel sx={{ fontSize: 18 }} />
+                            </IconButton>
+                          </Tooltip>
+                        )}
+                      </Box>
+                    </TableCell>
+                  )}
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </Paper>
 
-      </Box>
-    </LocalizationProvider>
+      {/* Dialog confirmar */}
+      <Dialog open={confirmDialog.open} onClose={() => setConfirmDialog({ open: false, patient: null })} maxWidth="xs" fullWidth>
+        <DialogTitle fontWeight={700}>Confirmar Agendamento</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2">
+            Confirmar o agendamento de <b>{confirmDialog.patient?.nome || confirmDialog.patient?.name}</b>?
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ p: 2 }}>
+          <Button onClick={() => setConfirmDialog({ open: false, patient: null })} variant="outlined">Cancelar</Button>
+          <Button onClick={() => handleConfirm(confirmDialog.patient)} variant="contained">Confirmar</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog cancelar */}
+      <Dialog open={cancelDialog.open} onClose={() => setCancelDialog({ open: false, patient: null, reason: '' })} maxWidth="xs" fullWidth>
+        <DialogTitle fontWeight={700} sx={{ color: 'error.main' }}>Cancelar Agendamento</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" sx={{ mb: 2 }}>
+            Cancelar agendamento de <b>{cancelDialog.patient?.nome || cancelDialog.patient?.name}</b>?
+          </Typography>
+          <TextField
+            fullWidth multiline rows={2}
+            label="Motivo do cancelamento (opcional)"
+            value={cancelDialog.reason}
+            onChange={e => setCancelDialog(d => ({ ...d, reason: e.target.value }))}
+          />
+        </DialogContent>
+        <DialogActions sx={{ p: 2 }}>
+          <Button onClick={() => setCancelDialog({ open: false, patient: null, reason: '' })} variant="outlined">Voltar</Button>
+          <Button onClick={handleCancel} variant="contained" color="error">Cancelar Agendamento</Button>
+        </DialogActions>
+      </Dialog>
+    </Box>
   );
 };
 

@@ -1,439 +1,176 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
-import { useAuth } from "../contexts/AuthContext";
-import api from "../services/api";
-
+import { useState, useContext } from 'react';
 import {
-  Box,
-  Paper,
-  Typography,
-  TextField,
-  Button,
-  Alert,
-  Divider,
-  Tabs,
-  Tab,
-  Grid,
-  Card,
-  CardContent,
-  IconButton,
-  Avatar,
-  Chip,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  InputAdornment,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  Snackbar,
-  CircularProgress,
-} from "@mui/material";
+  Box, Typography, Paper, TextField, Button, Grid, MenuItem,
+  Divider, Alert, Snackbar, Card, CardContent, Avatar, Chip,
+  List, ListItem, ListItemAvatar, ListItemText, ListItemSecondaryAction,
+  IconButton, Dialog, DialogTitle, DialogContent, DialogActions,
+  CircularProgress
+} from '@mui/material';
+import { Settings as SettingsIcon, PersonAdd, Delete, Edit, Save, Business } from '@mui/icons-material';
+import { AuthContext } from '../contexts/AuthContext';
 
-import { styled } from "@mui/material/styles";
+const CARGOS = [
+  { value: 'gestor', label: 'Gestor' },
+  { value: 'atendente', label: 'Atendente' },
+  { value: 'dentista', label: 'Dentista' },
+  { value: 'financeiro', label: 'Financeiro' },
+];
 
-import PersonAddIcon from "@mui/icons-material/PersonAdd";
-import EditIcon from "@mui/icons-material/Edit";
-import DeleteIcon from "@mui/icons-material/Delete";
-import PhoneIcon from "@mui/icons-material/Phone";
-import EmailIcon from "@mui/icons-material/Email";
-import BadgeIcon from "@mui/icons-material/Badge";
-import WhatsAppIcon from "@mui/icons-material/WhatsApp";
-import AssignmentIndIcon from "@mui/icons-material/AssignmentInd";
-import LocationOnIcon from "@mui/icons-material/LocationOn";
-import DescriptionIcon from "@mui/icons-material/Description";
-import AccountCircleIcon from "@mui/icons-material/AccountCircle";
-import RefreshIcon from "@mui/icons-material/Refresh";
-
-/* ======================================================
-   CONFIGURAÇÃO CENTRAL DE CARGOS
-====================================================== */
-
-const ROLE_CONFIG = {
-  proprietario: {
-    label: "👑 Proprietário",
-    colors: { bg: "#9C27B0", text: "#FFFFFF" },
-  },
-  gestor: {
-    label: "👑 Gestor",
-    colors: { bg: "#A7C7E7", text: "#4A5568" },
-  },
-  financeiro: {
-    label: "💰 Financeiro",
-    colors: { bg: "#C5E0C5", text: "#4F7A4F" },
-  },
-  atendente: {
-    label: "📋 Atendente",
-    colors: { bg: "#F9D7D7", text: "#A65D5D" },
-  },
-  dentista: {
-    label: "🦷 Dentista",
-    colors: { bg: "#FFE5B4", text: "#B87C4A" },
-  },
+const CARGO_COLORS = {
+  proprietario: '#7C3AED',
+  gestor: '#2563EB',
+  dentista: '#059669',
+  atendente: '#D97706',
+  financeiro: '#0891B2',
 };
 
-const getRoleLabel = (cargo) =>
-  ROLE_CONFIG[cargo]?.label || cargo || "Não informado";
-
-const getRoleColors = (cargo) =>
-  ROLE_CONFIG[cargo]?.colors || ROLE_CONFIG.atendente.colors;
-
-/* ======================================================
-   ESTILIZAÇÕES
-====================================================== */
-
-const StyledCard = styled(Card)({
-  borderRadius: 16,
-  transition: "transform 0.2s, box-shadow 0.2s",
-  "&:hover": {
-    transform: "translateY(-4px)",
-    boxShadow: "0 12px 24px rgba(0,0,0,0.05)",
-  },
-});
-
-/* ======================================================
-   COMPONENTE PRINCIPAL
-====================================================== */
-
 const Settings = () => {
-  const { user, clinicName } = useAuth();
+  const { user, clinicName, register } = useContext(AuthContext);
+  const [tab, setTab] = useState(0);
+  const [newUser, setNewUser] = useState({ nome: '', email: '', senha: '', cargo: 'atendente' });
+  const [snack, setSnack] = useState({ open: false, msg: '', severity: 'success' });
+  const [loading, setLoading] = useState(false);
+  const [clinicForm, setClinicForm] = useState({ nome: clinicName || '', telefone: '', endereco: '' });
 
-  const [tabValue, setTabValue] = useState(0);
-  const [colaboradores, setColaboradores] = useState([]);
+  const show = (msg, severity = 'success') => setSnack({ open: true, msg, severity });
 
-  const [loadingList, setLoadingList] = useState(false);
-  const [loadingSave, setLoadingSave] = useState(false);
-  const [loadingDelete, setLoadingDelete] = useState(false);
-
-  const [openDialog, setOpenDialog] = useState(false);
-  const [editingUser, setEditingUser] = useState(null);
-
-  const [snackbar, setSnackbar] = useState({
-    open: false,
-    message: "",
-    severity: "success",
-  });
-
-  const [formData, setFormData] = useState({
-    nome: "",
-    email: "",
-    telefone: "",
-    whatsapp: "",
-    cpf: "",
-    endereco: "",
-    cargo: "atendente",
-    especialidade: "",
-    cro: "",
-    biografia: "",
-    senha: "",
-  });
-
-  /* ======================================================
-     PERMISSÃO
-  ====================================================== */
-
-  const temPermissao = useMemo(() => {
-    return ["gestor", "proprietario"].includes(user?.cargo);
-  }, [user]);
-
-  /* ======================================================
-     CARREGAMENTO
-  ====================================================== */
-
-  const carregarColaboradores = useCallback(async () => {
-    setLoadingList(true);
+  const handleAddUser = async (e) => {
+    e.preventDefault();
+    if (!newUser.nome || !newUser.email || !newUser.senha) {
+      show('Preencha todos os campos', 'error'); return;
+    }
+    setLoading(true);
     try {
-      const response = await api.get("/pessoas/colaboradores");
-      setColaboradores(response.data);
-    } catch (error) {
-      showSnackbar("Erro ao carregar colaboradores", "error");
+      await register({ ...newUser, tipoCadastro: 'existente', cnpjExistente: user?.cnpj });
+      show('Colaborador cadastrado com sucesso!');
+      setNewUser({ nome: '', email: '', senha: '', cargo: 'atendente' });
+    } catch (err) {
+      show(err.message || 'Erro ao cadastrar colaborador', 'error');
     } finally {
-      setLoadingList(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    carregarColaboradores();
-  }, [carregarColaboradores]);
-
-  /* ======================================================
-     MEMOIZAÇÃO DE CONTAGENS
-  ====================================================== */
-
-  const roleCounts = useMemo(() => {
-    return colaboradores.reduce((acc, c) => {
-      acc[c.cargo] = (acc[c.cargo] || 0) + 1;
-      return acc;
-    }, {});
-  }, [colaboradores]);
-
-  const filteredColaboradores = useMemo(() => {
-    if (tabValue === 0) return colaboradores;
-    const roles = ["atendente", "financeiro", "dentista"];
-    return colaboradores.filter((c) => c.cargo === roles[tabValue - 1]);
-  }, [tabValue, colaboradores]);
-
-  /* ======================================================
-     FUNÇÕES AUXILIARES
-  ====================================================== */
-
-  const showSnackbar = (message, severity = "success") => {
-    setSnackbar({ open: true, message, severity });
-  };
-
-  const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
-  };
-
-  const resetForm = () => {
-    setFormData({
-      nome: "",
-      email: "",
-      telefone: "",
-      whatsapp: "",
-      cpf: "",
-      endereco: "",
-      cargo: "atendente",
-      especialidade: "",
-      cro: "",
-      biografia: "",
-      senha: "",
-    });
-  };
-
-  /* ======================================================
-     SALVAR
-  ====================================================== */
-
-  const handleSave = async () => {
-    if (!formData.nome || !formData.email || !formData.telefone) {
-      return showSnackbar("Preencha os campos obrigatórios", "error");
-    }
-
-    if (!editingUser && !formData.senha) {
-      return showSnackbar("Senha obrigatória para novo colaborador", "error");
-    }
-
-    if (formData.cargo === "dentista" && !formData.cro) {
-      return showSnackbar("CRO obrigatório para dentista", "error");
-    }
-
-    setLoadingSave(true);
-
-    try {
-      if (editingUser) {
-        await api.put(
-          `/pessoas/colaboradores/${editingUser.id}`,
-          formData
-        );
-        showSnackbar("Atualizado com sucesso");
-      } else {
-        await api.post("/pessoas/colaboradores", formData);
-        showSnackbar("Criado com sucesso");
-      }
-
-      carregarColaboradores();
-      setOpenDialog(false);
-      resetForm();
-    } catch (error) {
-      showSnackbar("Erro ao salvar", "error");
-    } finally {
-      setLoadingSave(false);
+      setLoading(false);
     }
   };
-
-  /* ======================================================
-     DELETE
-  ====================================================== */
-
-  const handleDelete = async (id) => {
-    if (!window.confirm("Deseja remover este colaborador?")) return;
-
-    setLoadingDelete(true);
-
-    try {
-      await api.delete(`/pessoas/colaboradores/${id}`);
-      showSnackbar("Removido com sucesso");
-      carregarColaboradores();
-    } catch {
-      showSnackbar("Erro ao remover", "error");
-    } finally {
-      setLoadingDelete(false);
-    }
-  };
-
-  /* ======================================================
-     BLOQUEIO DE ACESSO
-  ====================================================== */
-
-  if (!temPermissao) {
-    return (
-      <Box p={5}>
-        <Typography variant="h5">
-          Acesso restrito.
-        </Typography>
-      </Box>
-    );
-  }
-
-  /* ======================================================
-     RENDER
-  ====================================================== */
 
   return (
-    <Box p={3}>
-      <Typography variant="h4" mb={3}>
-        ⚙️ Configurações - {clinicName}
-      </Typography>
+    <Box>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 3 }}>
+        <SettingsIcon sx={{ color: 'primary.main', fontSize: 28 }} />
+        <Typography variant="h5" fontWeight={700}>Configurações</Typography>
+      </Box>
 
-      <Button
-        startIcon={<PersonAddIcon />}
-        variant="contained"
-        onClick={() => {
-          setEditingUser(null);
-          resetForm();
-          setOpenDialog(true);
-        }}
-        sx={{ mb: 3 }}
-      >
-        Novo Colaborador
-      </Button>
+      <Grid container spacing={3}>
+        {/* Info da Clínica */}
+        <Grid item xs={12} md={6}>
+          <Paper sx={{ p: 3, borderRadius: 3, height: '100%' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2.5 }}>
+              <Business sx={{ color: 'primary.main' }} />
+              <Typography variant="h6" fontWeight={700}>Informações da Clínica</Typography>
+            </Box>
 
-      <Paper sx={{ mb: 3 }}>
-        <Tabs value={tabValue} onChange={(e, v) => setTabValue(v)}>
-          <Tab label={`Todos (${colaboradores.length})`} />
-          <Tab label={`Atendentes (${roleCounts.atendente || 0})`} />
-          <Tab label={`Financeiro (${roleCounts.financeiro || 0})`} />
-          <Tab label={`Dentistas (${roleCounts.dentista || 0})`} />
-        </Tabs>
-      </Paper>
+            <Box sx={{ mb: 3, p: 2, bgcolor: '#F8FAFC', borderRadius: 2 }}>
+              <Typography variant="body2" color="text.secondary">Clínica</Typography>
+              <Typography variant="h6" fontWeight={700}>{clinicName || '—'}</Typography>
+              <Typography variant="caption" color="text.secondary">ID: {user?.loja_id || '—'}</Typography>
+            </Box>
 
-      {loadingList ? (
-        <CircularProgress />
-      ) : (
-        <Grid container spacing={2}>
-          {filteredColaboradores.map((colab) => {
-            const colors = getRoleColors(colab.cargo);
-
-            return (
-              <Grid item xs={12} key={colab.id}>
-                <StyledCard>
-                  <CardContent>
-                    <Box display="flex" justifyContent="space-between">
-                      <Box display="flex" gap={2}>
-                        <Avatar
-                          sx={{
-                            bgcolor: colors.bg,
-                            color: colors.text,
-                          }}
-                        >
-                          {colab.nome?.charAt(0)}
-                        </Avatar>
-
-                        <Box>
-                          <Typography variant="h6">
-                            {colab.nome}
-                          </Typography>
-
-                          <Chip
-                            label={getRoleLabel(colab.cargo)}
-                            size="small"
-                            sx={{
-                              bgcolor: colors.bg,
-                              color: colors.text,
-                              mt: 1,
-                            }}
-                          />
-
-                          <Typography variant="body2" mt={1}>
-                            {colab.email}
-                          </Typography>
-
-                          <Typography variant="body2">
-                            {colab.telefone}
-                          </Typography>
-                        </Box>
-                      </Box>
-
-                      <Box>
-                        <IconButton
-                          onClick={() => {
-                            setEditingUser(colab);
-                            setFormData({ ...colab, senha: "" });
-                            setOpenDialog(true);
-                          }}
-                        >
-                          <EditIcon />
-                        </IconButton>
-
-                        <IconButton
-                          onClick={() => handleDelete(colab.id)}
-                        >
-                          <DeleteIcon />
-                        </IconButton>
-                      </Box>
-                    </Box>
-                  </CardContent>
-                </StyledCard>
-              </Grid>
-            );
-          })}
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <TextField
+                fullWidth label="Nome da Clínica"
+                value={clinicForm.nome}
+                onChange={e => setClinicForm(f => ({ ...f, nome: e.target.value }))}
+              />
+              <TextField
+                fullWidth label="Telefone"
+                value={clinicForm.telefone}
+                onChange={e => setClinicForm(f => ({ ...f, telefone: e.target.value }))}
+                placeholder="(00) 0000-0000"
+              />
+              <TextField
+                fullWidth label="Endereço"
+                value={clinicForm.endereco}
+                onChange={e => setClinicForm(f => ({ ...f, endereco: e.target.value }))}
+                placeholder="Rua, número, cidade"
+              />
+              <Button variant="contained" startIcon={<Save />}
+                onClick={() => show('Configurações salvas! (integração backend pendente)')}>
+                Salvar Alterações
+              </Button>
+            </Box>
+          </Paper>
         </Grid>
-      )}
 
-      {/* DIALOG */}
+        {/* Meu Perfil */}
+        <Grid item xs={12} md={6}>
+          <Paper sx={{ p: 3, borderRadius: 3, height: '100%' }}>
+            <Typography variant="h6" fontWeight={700} sx={{ mb: 2.5 }}>Meu Perfil</Typography>
 
-      <Dialog open={openDialog} onClose={() => setOpenDialog(false)} fullWidth>
-        <DialogTitle>
-          {editingUser ? "Editar" : "Novo"} Colaborador
-        </DialogTitle>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3, p: 2, bgcolor: '#F8FAFC', borderRadius: 2 }}>
+              <Avatar sx={{
+                width: 52, height: 52, fontWeight: 700, fontSize: '1.2rem',
+                bgcolor: CARGO_COLORS[user?.cargo] || 'primary.main'
+              }}>
+                {user?.nome?.charAt(0)}
+              </Avatar>
+              <Box>
+                <Typography variant="body1" fontWeight={700}>{user?.nome}</Typography>
+                <Typography variant="body2" color="text.secondary">{user?.email}</Typography>
+                <Chip
+                  label={user?.cargo?.charAt(0).toUpperCase() + user?.cargo?.slice(1)}
+                  size="small"
+                  sx={{ mt: 0.5, bgcolor: `${CARGO_COLORS[user?.cargo]}15`, color: CARGO_COLORS[user?.cargo], fontWeight: 700 }}
+                />
+              </Box>
+            </Box>
 
-        <DialogContent>
-          <TextField
-            fullWidth
-            label="Nome"
-            name="nome"
-            value={formData.nome}
-            onChange={handleChange}
-            sx={{ mt: 2 }}
-          />
+            <Alert severity="info" sx={{ borderRadius: 2, fontSize: '0.8rem' }}>
+              Para alterar senha ou e-mail, entre em contato com o administrador da clínica.
+            </Alert>
+          </Paper>
+        </Grid>
 
-          <TextField
-            fullWidth
-            label="Email"
-            name="email"
-            value={formData.email}
-            onChange={handleChange}
-            sx={{ mt: 2 }}
-          />
-        </DialogContent>
+        {/* Adicionar Colaborador */}
+        <Grid item xs={12}>
+          <Paper sx={{ p: 3, borderRadius: 3 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2.5 }}>
+              <PersonAdd sx={{ color: 'primary.main' }} />
+              <Typography variant="h6" fontWeight={700}>Adicionar Colaborador</Typography>
+            </Box>
 
-        <DialogActions>
-          <Button onClick={() => setOpenDialog(false)}>
-            Cancelar
-          </Button>
+            <form onSubmit={handleAddUser}>
+              <Grid container spacing={2}>
+                <Grid item xs={12} sm={6} md={3}>
+                  <TextField fullWidth label="Nome *" value={newUser.nome}
+                    onChange={e => setNewUser(f => ({ ...f, nome: e.target.value }))} />
+                </Grid>
+                <Grid item xs={12} sm={6} md={3}>
+                  <TextField fullWidth label="E-mail *" type="email" value={newUser.email}
+                    onChange={e => setNewUser(f => ({ ...f, email: e.target.value }))} />
+                </Grid>
+                <Grid item xs={12} sm={6} md={2}>
+                  <TextField fullWidth label="Senha *" type="password" value={newUser.senha}
+                    onChange={e => setNewUser(f => ({ ...f, senha: e.target.value }))} />
+                </Grid>
+                <Grid item xs={12} sm={6} md={2}>
+                  <TextField select fullWidth label="Cargo" value={newUser.cargo}
+                    onChange={e => setNewUser(f => ({ ...f, cargo: e.target.value }))}>
+                    {CARGOS.map(c => <MenuItem key={c.value} value={c.value}>{c.label}</MenuItem>)}
+                  </TextField>
+                </Grid>
+                <Grid item xs={12} md={2}>
+                  <Button type="submit" fullWidth variant="contained" disabled={loading}
+                    sx={{ height: '100%', minHeight: 40 }}>
+                    {loading ? <CircularProgress size={20} color="inherit" /> : 'Adicionar'}
+                  </Button>
+                </Grid>
+              </Grid>
+            </form>
+          </Paper>
+        </Grid>
+      </Grid>
 
-          <Button
-            onClick={handleSave}
-            disabled={loadingSave}
-            variant="contained"
-          >
-            {loadingSave ? <CircularProgress size={20} /> : "Salvar"}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      <Snackbar
-        open={snackbar.open}
-        autoHideDuration={4000}
-        onClose={() =>
-          setSnackbar({ ...snackbar, open: false })
-        }
-      >
-        <Alert severity={snackbar.severity}>
-          {snackbar.message}
-        </Alert>
+      <Snackbar open={snack.open} autoHideDuration={4000} onClose={() => setSnack(s => ({ ...s, open: false }))}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
+        <Alert severity={snack.severity} sx={{ borderRadius: 2 }}>{snack.msg}</Alert>
       </Snackbar>
     </Box>
   );
