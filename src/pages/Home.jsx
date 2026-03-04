@@ -87,7 +87,7 @@ const Home = () => {
       {/* Saudação */}
       <Box sx={{ mb: 3 }}>
         <Typography variant="h5" fontWeight={700} sx={{ color: "text.primary" }}>
-          {greeting}, {user?.nome?.split(" ")[0] || "usuário"}! 👋
+          {greeting}, {user?.nomeGestor?.split(" ")[0] || "usuário"}! 👋
         </Typography>
         <Typography variant="body2" color="text.secondary">
           {clinicName} — {now.toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long" })}
