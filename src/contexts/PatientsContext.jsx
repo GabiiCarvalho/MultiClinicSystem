@@ -1,239 +1,145 @@
-import { createContext, useState, useCallback } from 'react';
+import { createContext, useState, useCallback, useEffect, useContext } from 'react';
 import api from '../services/api';
+import { AuthContext } from './AuthContext';
 
 export const PatientsContext = createContext();
 
-// Helper: cria data para hoje com horário específico
-const today = (h, m = 0) => {
-  const d = new Date();
-  d.setHours(h, m, 0, 0);
-  return d.toISOString();
-};
-
-// Helper: cria data N dias a partir de hoje com horário
-const fromToday = (days, h, m = 0) => {
-  const d = new Date();
-  d.setDate(d.getDate() + days);
-  d.setHours(h, m, 0, 0);
-  return d.toISOString();
-};
-
-const INITIAL_MOCK = [
-  {
-    id: 1,
-    nome: 'João Silva',
-    telefone: '11999999999',
-    email: 'joao@email.com',
-    status: 'agendado',
-    pago: true,
-    procedimento: 'Consulta Odontológica',
-    dentist: 'Dra. Ana Silva',
-    data_hora: today(9, 0),        // hoje 09:00
-    valor: 150,
-    procedureProgress: 0,
-  },
-  {
-    id: 2,
-    nome: 'Maria Souza',
-    telefone: '11888888888',
-    email: 'maria@email.com',
-    status: 'em_procedimento',
-    pago: true,
-    procedimento: 'Limpeza Dental',
-    dentist: 'Dr. Carlos Santos',
-    data_hora: today(10, 30),      // hoje 10:30
-    valor: 200,
-    procedureProgress: 1,
-  },
-  {
-    id: 3,
-    nome: 'Carlos Oliveira',
-    telefone: '11777777777',
-    email: 'carlos@email.com',
-    status: 'finalizado',
-    pago: true,
-    procedimento: 'Canal',
-    dentist: 'Dra. Mariana Oliveira',
-    data_hora: today(14, 0),       // hoje 14:00
-    valor: 1200,
-    procedureProgress: 3,
-  },
-  {
-    id: 4,
-    nome: 'Ana Beatriz Lima',
-    telefone: '11666666666',
-    email: 'ana@email.com',
-    status: 'agendado',
-    pago: true,
-    procedimento: 'Clareamento Dental',
-    dentist: 'Dra. Ana Silva',
-    data_hora: fromToday(1, 9, 0), // amanhã 09:00
-    valor: 350,
-    procedureProgress: 0,
-  },
-  {
-    id: 5,
-    nome: 'Roberto Alves',
-    telefone: '11555555555',
-    email: 'roberto@email.com',
-    status: 'agendado',
-    pago: true,
-    procedimento: 'Extração',
-    dentist: 'Dr. Carlos Santos',
-    data_hora: fromToday(1, 11, 0), // amanhã 11:00
-    valor: 280,
-    procedureProgress: 0,
-  },
-  {
-    id: 6,
-    nome: 'Fernanda Costa',
-    telefone: '11444444444',
-    email: 'fernanda@email.com',
-    status: 'agendado',
-    pago: false,
-    procedimento: 'Ortodontia',
-    dentist: 'Dra. Mariana Oliveira',
-    data_hora: fromToday(2, 15, 30), // daqui 2 dias 15:30
-    valor: 500,
-    procedureProgress: 0,
-  },
-  {
-    id: 7,
-    nome: 'Paulo Mendes',
-    telefone: '11333333333',
-    email: 'paulo@email.com',
-    status: 'agendado',
-    pago: true,
-    procedimento: 'Implante Dentário',
-    dentist: 'Dr. Ricardo Lima',
-    data_hora: fromToday(3, 8, 0), // daqui 3 dias 08:00
-    valor: 2500,
-    procedureProgress: 0,
-  },
-  {
-    id: 8,
-    nome: 'Juliana Ferreira',
-    telefone: '11222222222',
-    email: 'juliana@email.com',
-    status: 'agendado',
-    pago: true,
-    procedimento: 'Consulta de Rotina',
-    dentist: 'Dra. Ana Silva',
-    data_hora: fromToday(5, 14, 0), // daqui 5 dias 14:00
-    valor: 120,
-    procedureProgress: 0,
-  },
-  {
-    id: 9,
-    nome: 'Marcos Pereira',
-    telefone: '11111111111',
-    email: 'marcos@email.com',
-    status: 'cancelado',
-    pago: false,
-    procedimento: 'Limpeza Dental',
-    dentist: 'Dr. Carlos Santos',
-    data_hora: fromToday(-1, 10, 0), // ontem 10:00
-    valor: 200,
-    procedureProgress: 0,
-  },
-  {
-    id: 10,
-    nome: 'Lucia Barbosa',
-    telefone: '11000000000',
-    email: 'lucia@email.com',
-    status: 'finalizado',
-    pago: true,
-    procedimento: 'Restauração',
-    dentist: 'Dra. Mariana Oliveira',
-    data_hora: fromToday(-2, 9, 30), // 2 dias atrás 09:30
-    valor: 400,
-    procedureProgress: 3,
-  },
-];
-
 export const PatientsProvider = ({ children }) => {
-  const [patients, setPatients] = useState(() => {
+  const { user } = useContext(AuthContext);
+  const [patients, setPatients] = useState([]);
+  const [loading,  setLoading]  = useState(false);
+
+  // ── Carrega pacientes da API quando o usuário logar ──────────────────────
+  useEffect(() => {
+    if (user?.clinica_id) {
+      fetchPatients();
+    } else {
+      // Usuário deslogou — limpa dados
+      setPatients([]);
+    }
+  }, [user?.clinica_id]);
+
+  // GET /pacientes — já filtrado por clinica_id no backend via JWT
+  const fetchPatients = useCallback(async (busca = '') => {
+    setLoading(true);
     try {
-      const stored = localStorage.getItem('patients');
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        // Se os dados salvos não têm data_hora recente, usa INITIAL_MOCK
-        if (parsed.length > 0 && parsed[0].data_hora) {
-          return parsed;
-        }
+      const params = busca ? `?busca=${encodeURIComponent(busca)}` : '';
+      const res = await api.get(`/pacientes${params}`);
+      setPatients(Array.isArray(res.data) ? res.data : []);
+    } catch (err) {
+      console.error('Erro ao buscar pacientes:', err);
+      setPatients([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // POST /pacientes — cria na API, backend vincula ao clinica_id do JWT
+  const addPatient = useCallback(async (p) => {
+    try {
+      const body = {
+        nome:            p.nome || p.name,
+        telefone:        p.telefone || p.phone || '',
+        email:           p.email    || '',
+        cpf:             p.cpf      || '',
+        data_nascimento: p.data_nascimento || null,
+        observacoes:     p.observations || p.observacoes || '',
+      };
+      const res = await api.post('/pacientes', body);
+      const created = res.data;
+
+      // Se tiver agendamento junto, cria o agendamento também
+      if (p.data_hora && p.profissional_id) {
+        await api.post('/agendamentos', {
+          paciente_id:      created.id,
+          profissional_id:  p.profissional_id,
+          procedimento_id:  p.procedimento_id || null,
+          data_hora:        p.data_hora,
+          data_hora_fim:    p.data_hora_fim || null,
+          valor:            p.valor || 0,
+          observacoes:      p.observations || p.observacoes || '',
+        });
       }
-      return INITIAL_MOCK;
-    } catch { return INITIAL_MOCK; }
-  });
 
-  const [loading, setLoading] = useState(false);
+      await fetchPatients(); // recarrega lista atualizada da API
+      return created;
+    } catch (err) {
+      console.error('Erro ao criar paciente:', err);
+      throw new Error(err.response?.data?.error || 'Erro ao criar paciente');
+    }
+  }, [fetchPatients]);
 
-  const save = (updater) => {
-    setPatients(prev => {
-      const next = typeof updater === 'function' ? updater(prev) : updater;
-      try { localStorage.setItem('patients', JSON.stringify(next)); } catch {}
-      return next;
-    });
-  };
-
-  const addPatient = useCallback((p) => {
-    const patient = {
-      ...p,
-      id: p.id || Date.now(),
-      status: p.status || (p.pago ? 'agendado' : 'pendente_pagamento'),
-      procedureProgress: 0,
-    };
-    save((prev) => [...prev, patient]);
-
-    // Tenta sincronizar com API
-    api.post('/pacientes', patient).catch(() => {});
-    return patient;
+  // PATCH /pacientes/:id — atualiza campos do paciente
+  const updatePatient = useCallback(async (id, fields) => {
+    try {
+      const res = await api.patch(`/pacientes/${id}`, fields);
+      setPatients(prev => prev.map(p => p.id === id ? { ...p, ...res.data } : p));
+      return res.data;
+    } catch (err) {
+      console.error('Erro ao atualizar paciente:', err);
+      throw new Error(err.response?.data?.error || 'Erro ao atualizar');
+    }
   }, []);
 
-  const updatePatientStatus = useCallback((id, status, reason = null) => {
-    save((prev) => prev.map((p) => p.id === id ? {
-      ...p, status,
-      inProcedure: status === 'em_procedimento',
-      completedToday: status === 'finalizado',
-      cancelReason: reason,
-    } : p));
-    api.patch(`/pacientes/${id}/status`, { status }).catch(() => {});
-  }, []);
+  // Atualiza status de um agendamento (usado pelo Kanban e CalendarSaaS)
+  // PATCH /agendamentos/:id/status
+  const updatePatientStatus = useCallback(async (id, status) => {
+    // Atualização otimista no estado local
+    setPatients(prev => prev.map(p => p.id === id ? { ...p, status } : p));
+    try {
+      await api.patch(`/agendamentos/${id}/status`, { status });
+    } catch (err) {
+      console.error('Erro ao atualizar status:', err);
+      // Reverte em caso de erro
+      await fetchPatients();
+    }
+  }, [fetchPatients]);
 
+  // Atualiza progresso do procedimento (sem rota dedicada, usa patch local)
   const updatePatientProgress = useCallback((id, progress) => {
-    save((prev) => prev.map((p) => p.id === id ? { ...p, procedureProgress: progress } : p));
+    setPatients(prev => prev.map(p => p.id === id ? { ...p, procedureProgress: progress } : p));
+    // Persiste via PATCH /agendamentos/:id/progresso se o agendamento existir
+    api.patch(`/agendamentos/${id}/progresso`, { progress }).catch(() => {});
   }, []);
 
-  // Atualiza a data/hora de um paciente (usado pelo CalendarSaaS ao arrastar)
-  const updatePatientDate = useCallback((id, newDate) => {
+  // Atualiza data/hora de um paciente — usado pelo CalendarSaaS no drag & drop
+  // PATCH /pacientes/:id/data
+  const updatePatientDate = useCallback(async (id, newDate) => {
     const iso = newDate instanceof Date ? newDate.toISOString() : String(newDate);
-    save((prev) => prev.map((p) => p.id === id ? { ...p, data_hora: iso } : p));
-    api.patch(`/pacientes/${id}/data`, { data_hora: iso }).catch(() => {});
+    setPatients(prev => prev.map(p => p.id === id ? { ...p, data_hora: iso } : p));
+    try {
+      await api.patch(`/pacientes/${id}/data`, { data_hora: iso });
+    } catch (err) {
+      console.error('Erro ao reagendar:', err);
+    }
   }, []);
 
   const marcarComoPago = useCallback((id) => {
-    save((prev) => prev.map((p) => p.id === id ? { ...p, pago: true, status: 'agendado' } : p));
+    setPatients(prev => prev.map(p => p.id === id ? { ...p, pago: true, status: 'agendado' } : p));
   }, []);
 
+  // Agrupa pacientes por status para o Kanban
   const getPatientsByStatus = useCallback(() => ({
-    pendentes:       patients.filter((p) => p?.status === 'pendente_pagamento'),
-    aguardando:      patients.filter((p) => p?.status === 'agendado' && p?.pago),
-    em_procedimento: patients.filter((p) => p?.status === 'em_procedimento'),
-    finalizado:      patients.filter((p) => p?.status === 'finalizado'),
-    cancelado:       patients.filter((p) => p?.status === 'cancelado'),
+    pendentes:       patients.filter(p => p?.status === 'pendente_pagamento'),
+    aguardando:      patients.filter(p => p?.status === 'agendado' && p?.pago),
+    em_procedimento: patients.filter(p => p?.status === 'em_procedimento'),
+    finalizado:      patients.filter(p => p?.status === 'finalizado'),
+    cancelado:       patients.filter(p => p?.status === 'cancelado'),
   }), [patients]);
-
-  // Força reset para dados mock frescos (útil em dev)
-  const resetToMock = useCallback(() => {
-    localStorage.removeItem('patients');
-    setPatients(INITIAL_MOCK);
-  }, []);
 
   return (
     <PatientsContext.Provider value={{
-      patients, loading, setPatients,
-      addPatient, updatePatientStatus, updatePatientProgress,
-      updatePatientDate, marcarComoPago, getPatientsByStatus, resetToMock,
+      patients,
+      loading,
+      setPatients,
+      fetchPatients,
+      addPatient,
+      updatePatient,
+      updatePatientStatus,
+      updatePatientProgress,
+      updatePatientDate,
+      marcarComoPago,
+      getPatientsByStatus,
     }}>
       {children}
     </PatientsContext.Provider>

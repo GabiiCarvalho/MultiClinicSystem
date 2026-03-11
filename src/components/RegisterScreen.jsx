@@ -170,14 +170,14 @@ const RegisterScreen = ({ onSwitchToLogin }) => {
               fullWidth size="small"
               label="Seu nome *"
               value={form.nomeGestor}
-              onChange={e => set('nomeProprietario', e.target.value)}
+              onChange={e => set('nomeGestor', e.target.value)}
             />
             <TextField
               fullWidth size="small"
               label="E-mail *"
               type="email"
               value={form.emailGestor}
-              onChange={e => set('emailProprietario', e.target.value)}
+              onChange={e => set('emailGestor', e.target.value)}
             />
             <TextField
               fullWidth size="small"

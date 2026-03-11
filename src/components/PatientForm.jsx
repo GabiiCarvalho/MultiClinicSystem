@@ -1,18 +1,22 @@
-import { useState, useContext } from 'react';
+import { useState, useContext, useEffect } from 'react';
+import { PatientsContext } from '../contexts/PatientsContext';
+import { AuthContext } from '../contexts/AuthContext';
+import api from '../services/api';
 import {
   Box, Grid, TextField, Button, Typography, MenuItem, Paper,
   Tabs, Tab, Autocomplete, Alert, Snackbar, Chip, Avatar,
-  InputAdornment, Divider, CircularProgress
+  InputAdornment, CircularProgress
 } from '@mui/material';
 import {
   PersonAdd, EventNote, Person, Phone, Email, Badge,
-  MedicalServices, AccessTime, Notes, AttachMoney, Search
+  MedicalServices, Notes, AttachMoney, Search
 } from '@mui/icons-material';
 import { DatePicker, TimePicker, LocalizationProvider } from '@mui/x-date-pickers';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { ptBR } from 'date-fns/locale';
 import { PatientsContext } from '../contexts/PatientsContext';
 
+/* ─── Preços padrão — idealmente viria de GET /procedimentos ─── */
 const PROCEDURES = {
   'Consulta Odontológica':  150,
   'Limpeza Dental':         200,
@@ -28,21 +32,15 @@ const PROCEDURES = {
   'Outros':                 300,
 };
 
-const DENTISTS = [
-  'Dra. Ana Silva', 'Dr. Carlos Santos', 'Dra. Mariana Oliveira',
-  'Dr. Rafael Mendes', 'Dra. Juliana Costa'
-];
-
 const defaultNew = () => ({
   nome: '', telefone: '', email: '', cpf: '',
   procedimento: 'Consulta Odontológica',
-  dentist: DENTISTS[0],
+  profissional_id: '',
   observations: '',
   scheduleDate: new Date(),
   scheduleTime: new Date(),
 });
 
-// Campo com ícone padrão
 const IconField = ({ icon, ...props }) => (
   <TextField
     {...props}
@@ -68,20 +66,24 @@ const SectionTitle = ({ children }) => (
 );
 
 const PatientForm = ({ onNavigateToCashier }) => {
-  const { patients, addPatient } = useContext(PatientsContext);
-  const [tab, setTab] = useState(0);
-  const [loading, setLoading] = useState(false);
+  const { patients, addPatient, fetchPatients } = useContext(PatientsContext);
+  const { user } = useContext(AuthContext);
+
+  const [tab,         setTab]         = useState(0);
+  const [loading,     setLoading]     = useState(false);
+  const [dentistas,   setDentistas]   = useState([]);  // profissionais reais da clínica
+  const [loadingDent, setLoadingDent] = useState(false);
 
   // Novo paciente
   const [form, setForm] = useState(defaultNew());
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   // Agendamento rápido
-  const [search, setSearch] = useState('');
+  const [search,   setSearch]   = useState('');
   const [selected, setSelected] = useState(null);
-  const [quick, setQuick] = useState({
+  const [quick,    setQuick]    = useState({
     procedimento: 'Consulta Odontológica',
-    dentist: DENTISTS[0],
+    profissional_id: '',
     scheduleDate: new Date(),
     scheduleTime: new Date(),
     observations: '',
@@ -90,6 +92,31 @@ const PatientForm = ({ onNavigateToCashier }) => {
 
   const [snack, setSnack] = useState({ open: false, msg: '', severity: 'success' });
   const show = (msg, severity = 'success') => setSnack({ open: true, msg, severity });
+
+  // Busca profissionais reais da clínica (dentistas + esteticistas)
+  useEffect(() => {
+    const fetchDentistas = async () => {
+      setLoadingDent(true);
+      try {
+        const res = await api.get('/usuarios');
+        const profissionais = (res.data || []).filter(u =>
+          ['dentista', 'esteticista', 'Dentista', 'Esteticista'].includes(u.cargo)
+        );
+        setDentistas(profissionais);
+        // Pré-seleciona o primeiro
+        if (profissionais.length > 0) {
+          set('profissional_id', profissionais[0].id);
+          setQ('profissional_id', profissionais[0].id);
+        }
+      } catch (err) {
+        console.error('Erro ao buscar profissionais:', err);
+        // Fallback vazio — usuário escolhe manualmente
+      } finally {
+        setLoadingDent(false);
+      }
+    };
+    fetchDentistas();
+  }, []);
 
   const combineDT = (date, time) => {
     const d = new Date(date);
@@ -101,25 +128,32 @@ const PatientForm = ({ onNavigateToCashier }) => {
   const handleNewSubmit = async (e) => {
     e.preventDefault();
     if (!form.nome || !form.telefone) { show('Preencha Nome e Telefone', 'error'); return; }
+    if (!form.profissional_id)        { show('Selecione um profissional', 'error'); return; }
+
     setLoading(true);
     try {
-      const dt = combineDT(form.scheduleDate, form.scheduleTime);
-      const patient = addPatient({
-        nome: form.nome, name: form.nome,
-        telefone: form.telefone, phone: form.telefone,
-        email: form.email, cpf: form.cpf,
-        procedimento: form.procedimento, procedureType: form.procedimento,
-        dentist: form.dentist,
-        observations: form.observations,
-        data_hora: dt.toISOString(),
-        valor: PROCEDURES[form.procedimento] || 150,
-        status: 'pendente_pagamento',
-        pago: false,
+      const dt  = combineDT(form.scheduleDate, form.scheduleTime);
+      const dtFim = new Date(dt.getTime() + 60 * 60000);
+
+      // addPatient agora é async e chama a API
+      const patient = await addPatient({
+        nome:            form.nome,
+        telefone:        form.telefone,
+        email:           form.email,
+        cpf:             form.cpf,
+        observacoes:     form.observations,
+        // Dados do agendamento (addPatient cria ambos)
+        profissional_id: form.profissional_id,
+        data_hora:       dt.toISOString(),
+        data_hora_fim:   dtFim.toISOString(),
+        valor:           PROCEDURES[form.procedimento] || 150,
       });
-      localStorage.setItem('pendingPayment', JSON.stringify({ patient, procedure: form.procedimento, valor: PROCEDURES[form.procedimento] }));
+
       show('Paciente cadastrado! Redirecionando para caixa...');
       setForm(defaultNew());
       setTimeout(() => onNavigateToCashier?.(), 1800);
+    } catch (err) {
+      show(err.message || 'Erro ao cadastrar paciente', 'error');
     } finally {
       setLoading(false);
     }
@@ -127,25 +161,31 @@ const PatientForm = ({ onNavigateToCashier }) => {
 
   const handleQuickSubmit = async (e) => {
     e.preventDefault();
-    if (!selected) { show('Selecione um paciente', 'error'); return; }
+    if (!selected)                { show('Selecione um paciente', 'error'); return; }
+    if (!quick.profissional_id)   { show('Selecione um profissional', 'error'); return; }
+
     setLoading(true);
     try {
-      const dt = combineDT(quick.scheduleDate, quick.scheduleTime);
-      const patient = addPatient({
-        ...selected,
-        procedimento: quick.procedimento, procedureType: quick.procedimento,
-        dentist: quick.dentist,
-        observations: quick.observations,
-        data_hora: dt.toISOString(),
-        valor: PROCEDURES[quick.procedimento] || 150,
-        status: 'pendente_pagamento',
-        pago: false,
-        id: undefined,
+      const dt    = combineDT(quick.scheduleDate, quick.scheduleTime);
+      const dtFim = new Date(dt.getTime() + 60 * 60000);
+
+      // Cria só o agendamento para paciente já existente
+      await api.post('/agendamentos', {
+        paciente_id:      selected.id,
+        profissional_id:  quick.profissional_id,
+        data_hora:        dt.toISOString(),
+        data_hora_fim:    dtFim.toISOString(),
+        valor:            PROCEDURES[quick.procedimento] || 150,
+        observacoes:      quick.observations,
       });
-      localStorage.setItem('pendingPayment', JSON.stringify({ patient, procedure: quick.procedimento, valor: PROCEDURES[quick.procedimento] }));
+
+      await fetchPatients(); // atualiza lista
       show('Agendamento criado! Redirecionando para caixa...');
-      setSelected(null); setSearch('');
+      setSelected(null);
+      setSearch('');
       setTimeout(() => onNavigateToCashier?.(), 1800);
+    } catch (err) {
+      show(err.response?.data?.error || err.message || 'Erro ao agendar', 'error');
     } finally {
       setLoading(false);
     }
@@ -156,8 +196,42 @@ const PatientForm = ({ onNavigateToCashier }) => {
     (p.telefone || p.phone || '').includes(search)
   );
 
-  const procPrice = PROCEDURES[form.procedimento] || 0;
-  const quickPrice = PROCEDURES[quick.procedimento] || 0;
+  const procPrice   = PROCEDURES[form.procedimento]  || 0;
+  const quickPrice  = PROCEDURES[quick.procedimento] || 0;
+
+  const DentistaSelect = ({ value, onChange, label = 'Dentista / Profissional' }) => (
+    <TextField
+      select
+      fullWidth
+      label={label}
+      value={value}
+      onChange={e => onChange(e.target.value)}
+      disabled={loadingDent}
+      InputProps={{
+        startAdornment: (
+          <InputAdornment position="start">
+            <Person sx={{ color: 'text.disabled', fontSize: 20 }} />
+          </InputAdornment>
+        ),
+      }}
+    >
+      {loadingDent
+        ? <MenuItem disabled>Carregando...</MenuItem>
+        : dentistas.length > 0
+          ? dentistas.map(d => (
+              <MenuItem key={d.id} value={d.id}>
+                {d.nome}
+                {d.especialidade && (
+                  <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+                    · {d.especialidade}
+                  </Typography>
+                )}
+              </MenuItem>
+            ))
+          : <MenuItem disabled>Nenhum profissional cadastrado</MenuItem>
+      }
+    </TextField>
+  );
 
   return (
     <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={ptBR}>
@@ -167,29 +241,19 @@ const PatientForm = ({ onNavigateToCashier }) => {
           Agende para paciente existente ou cadastre um novo
         </Typography>
 
-        {/* Tabs */}
         <Paper sx={{ mb: 3, borderRadius: 2 }}>
           <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ px: 1 }}>
-            <Tab
-              icon={<EventNote sx={{ fontSize: 18 }} />}
-              iconPosition="start"
-              label="Agendamento Rápido"
-              sx={{ minHeight: 52, fontSize: '0.85rem' }}
-            />
-            <Tab
-              icon={<PersonAdd sx={{ fontSize: 18 }} />}
-              iconPosition="start"
-              label="Novo Paciente"
-              sx={{ minHeight: 52, fontSize: '0.85rem' }}
-            />
+            <Tab icon={<EventNote sx={{ fontSize: 18 }} />} iconPosition="start"
+              label="Agendamento Rápido" sx={{ minHeight: 52, fontSize: '0.85rem' }} />
+            <Tab icon={<PersonAdd sx={{ fontSize: 18 }} />} iconPosition="start"
+              label="Novo Paciente" sx={{ minHeight: 52, fontSize: '0.85rem' }} />
           </Tabs>
         </Paper>
 
-        {/* ───── ABA 0: AGENDAMENTO RÁPIDO ───── */}
+        {/* ── ABA 0: AGENDAMENTO RÁPIDO ── */}
         {tab === 0 && (
           <form onSubmit={handleQuickSubmit}>
             <Paper sx={{ p: { xs: 2, sm: 3 }, borderRadius: 3 }}>
-
               <SectionTitle>Selecionar Paciente</SectionTitle>
 
               <Autocomplete
@@ -201,8 +265,7 @@ const PatientForm = ({ onNavigateToCashier }) => {
                 noOptionsText="Nenhum paciente encontrado"
                 renderInput={params => (
                   <TextField {...params} label="Buscar por nome ou telefone" fullWidth
-                    InputProps={{ ...params.InputProps, startAdornment: <><Search sx={{ color: 'text.disabled', mr: 0.5, fontSize: 20 }} />{params.InputProps.startAdornment}</> }}
-                  />
+                    InputProps={{ ...params.InputProps, startAdornment: <><Search sx={{ color: 'text.disabled', mr: 0.5, fontSize: 20 }} />{params.InputProps.startAdornment}</> }} />
                 )}
                 renderOption={(props, o) => (
                   <li {...props}>
@@ -250,32 +313,24 @@ const PatientForm = ({ onNavigateToCashier }) => {
                   </TextField>
                 </Grid>
                 <Grid item xs={12} sm={6}>
-                  <TextField select fullWidth label="Dentista / Profissional" value={quick.dentist}
-                    onChange={e => setQ('dentist', e.target.value)}
-                    InputProps={{ startAdornment: <InputAdornment position="start"><Person sx={{ color: 'text.disabled', fontSize: 20 }} /></InputAdornment> }}>
-                    {DENTISTS.map(d => <MenuItem key={d} value={d}>{d}</MenuItem>)}
-                  </TextField>
+                  <DentistaSelect value={quick.profissional_id} onChange={v => setQ('profissional_id', v)} />
                 </Grid>
                 <Grid item xs={12} sm={6}>
                   <DatePicker label="Data do agendamento" value={quick.scheduleDate}
-                    onChange={v => setQ('scheduleDate', v)}
-                    minDate={new Date()} format="dd/MM/yyyy"
+                    onChange={v => setQ('scheduleDate', v)} minDate={new Date()} format="dd/MM/yyyy"
                     slotProps={{ textField: { fullWidth: true } }} />
                 </Grid>
                 <Grid item xs={12} sm={6}>
                   <TimePicker label="Horário" value={quick.scheduleTime}
-                    onChange={v => setQ('scheduleTime', v)}
-                    slotProps={{ textField: { fullWidth: true } }} />
+                    onChange={v => setQ('scheduleTime', v)} slotProps={{ textField: { fullWidth: true } }} />
                 </Grid>
                 <Grid item xs={12}>
                   <TextField fullWidth multiline rows={2} label="Observações (opcional)"
                     value={quick.observations} onChange={e => setQ('observations', e.target.value)}
-                    InputProps={{ startAdornment: <InputAdornment position="start" sx={{ alignSelf: 'flex-start', mt: 1 }}><Notes sx={{ color: 'text.disabled', fontSize: 20 }} /></InputAdornment> }}
-                  />
+                    InputProps={{ startAdornment: <InputAdornment position="start" sx={{ alignSelf: 'flex-start', mt: 1 }}><Notes sx={{ color: 'text.disabled', fontSize: 20 }} /></InputAdornment> }} />
                 </Grid>
               </Grid>
 
-              {/* Rodapé com total */}
               <Box sx={{ mt: 3, p: 2, bgcolor: '#F8FAFC', borderRadius: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
                 <Box>
                   <Typography variant="caption" color="text.secondary">Valor do procedimento</Typography>
@@ -293,11 +348,10 @@ const PatientForm = ({ onNavigateToCashier }) => {
           </form>
         )}
 
-        {/* ───── ABA 1: NOVO PACIENTE ───── */}
+        {/* ── ABA 1: NOVO PACIENTE ── */}
         {tab === 1 && (
           <form onSubmit={handleNewSubmit}>
             <Paper sx={{ p: { xs: 2, sm: 3 }, borderRadius: 3 }}>
-
               <SectionTitle>Dados Pessoais</SectionTitle>
 
               <Grid container spacing={2}>
@@ -339,33 +393,25 @@ const PatientForm = ({ onNavigateToCashier }) => {
                   </TextField>
                 </Grid>
                 <Grid item xs={12} sm={6}>
-                  <TextField select fullWidth label="Dentista / Profissional" value={form.dentist}
-                    onChange={e => set('dentist', e.target.value)}
-                    InputProps={{ startAdornment: <InputAdornment position="start"><Person sx={{ color: 'text.disabled', fontSize: 20 }} /></InputAdornment> }}>
-                    {DENTISTS.map(d => <MenuItem key={d} value={d}>{d}</MenuItem>)}
-                  </TextField>
+                  <DentistaSelect value={form.profissional_id} onChange={v => set('profissional_id', v)} />
                 </Grid>
                 <Grid item xs={12} sm={6}>
                   <DatePicker label="Data do agendamento" value={form.scheduleDate}
-                    onChange={v => set('scheduleDate', v)}
-                    minDate={new Date()} format="dd/MM/yyyy"
+                    onChange={v => set('scheduleDate', v)} minDate={new Date()} format="dd/MM/yyyy"
                     slotProps={{ textField: { fullWidth: true } }} />
                 </Grid>
                 <Grid item xs={12} sm={6}>
                   <TimePicker label="Horário" value={form.scheduleTime}
-                    onChange={v => set('scheduleTime', v)}
-                    slotProps={{ textField: { fullWidth: true } }} />
+                    onChange={v => set('scheduleTime', v)} slotProps={{ textField: { fullWidth: true } }} />
                 </Grid>
                 <Grid item xs={12}>
                   <IconField fullWidth multiline rows={3} label="Observações (opcional)"
                     value={form.observations} onChange={e => set('observations', e.target.value)}
                     icon={<Notes sx={{ fontSize: 20 }} />}
-                    InputProps={{ startAdornment: <InputAdornment position="start" sx={{ alignSelf: 'flex-start', mt: 1 }}><Notes sx={{ color: 'text.disabled', fontSize: 20 }} /></InputAdornment> }}
-                  />
+                    InputProps={{ startAdornment: <InputAdornment position="start" sx={{ alignSelf: 'flex-start', mt: 1 }}><Notes sx={{ color: 'text.disabled', fontSize: 20 }} /></InputAdornment> }} />
                 </Grid>
               </Grid>
 
-              {/* Rodapé */}
               <Box sx={{ mt: 3, p: 2, bgcolor: '#F8FAFC', borderRadius: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
                 <Box>
                   <Typography variant="caption" color="text.secondary">Valor do procedimento</Typography>
