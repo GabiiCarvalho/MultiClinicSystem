@@ -26,94 +26,91 @@ const parseDate = (str) => {
   } catch { return null; }
 };
 
+// Função getSteps com verificação segura
 const getSteps = (procedureType = '') => {
-  const t = procedureType.toLowerCase();
-  if (t.includes('cirurgia') || t.includes('microcirurgia')) {
+  const proc = procedureType ? String(procedureType).toLowerCase() : '';
+  if (proc.includes('cirurgia') || proc.includes('microcirurgia')) {
     return ['Preparação', 'Anestesia', 'Procedimento', 'Recuperação'];
   }
-  if (t.includes('consulta')) {
+  if (proc.includes('consulta')) {
     return ['Anamnese', 'Exame', 'Diagnóstico', 'Finalização'];
   }
   return ['Preparação', 'Procedimento', 'Finalização'];
 };
 
 const DentistSchedulePanel = () => {
-  const { patients, updatePatientStatus, updatePatientProgress } = useContext(PatientsContext);
+  const { patients, updatePatientStatus, updatePatientProgress, fetchPatients } = useContext(PatientsContext);
   const { user } = useContext(AuthContext);
 
-  const [selectedDate,        setSelectedDate]        = useState(new Date());
-  const [myPatients,          setMyPatients]          = useState([]);
-  const [apiAppointments,     setApiAppointments]     = useState([]);
-  const [loadingAppointments, setLoadingAppointments] = useState(false);
-  const [selectedPatient,     setSelectedPatient]     = useState(null);
-  const [openProgressDialog,  setOpenProgressDialog]  = useState(false);
-  const [newProgress,         setNewProgress]         = useState(0);
-  const [error,               setError]               = useState('');
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [myPatients, setMyPatients] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [selectedPatient, setSelectedPatient] = useState(null);
+  const [openProgressDialog, setOpenProgressDialog] = useState(false);
+  const [newProgress, setNewProgress] = useState(0);
+  const [error, setError] = useState('');
 
-  // Busca agendamentos do dia na API filtrados pelo profissional logado
+  // ✅ CORRIGIDO: Buscar pacientes do dentista logado
   useEffect(() => {
-    if (!user?.id) return;
-    const fetchMyAppointments = async () => {
-      setLoadingAppointments(true);
+    const loadPatients = async () => {
+      if (!user?.id) return;
+      
+      setLoading(true);
       setError('');
+      
       try {
+        // Buscar agendamentos do dia filtrados por profissional_id
         const dateStr = format(selectedDate, 'yyyy-MM-dd');
-        // O backend já filtra por profissional_id quando o cargo é dentista/esteticista
-        const res = await api.get(`/agendamentos?data=${dateStr}`);
-        setApiAppointments(Array.isArray(res.data) ? res.data : []);
+        const response = await api.get(`/agendamentos?data=${dateStr}&profissional_id=${user.id}`);
+        
+        const appointments = Array.isArray(response.data) ? response.data : [];
+        
+        // Se não veio do backend com JOIN, normalizar
+        const normalized = appointments.map(appt => ({
+          id: appt.id,
+          paciente: appt.paciente || { nome: appt.paciente_nome },
+          nome: appt.paciente?.nome || appt.paciente_nome,
+          procedimento: appt.procedimento?.nome || appt.procedimento_nome,
+          procedureType: appt.procedimento?.nome || appt.procedimento_nome,
+          data_hora: appt.data_hora,
+          status: appt.status,
+          procedureProgress: appt.progresso || 0,
+          observacoes: appt.observacoes,
+          telefone: appt.paciente?.telefone,
+        }));
+        
+        setMyPatients(normalized);
       } catch (err) {
         console.error('Erro ao buscar agenda:', err);
-        setError('Não foi possível carregar sua agenda.');
-        setApiAppointments([]);
+        setError('Erro ao carregar agenda. Tente novamente.');
+        
+        // Fallback: usar dados do contexto como backup
+        const filtered = patients.filter(p => {
+          // Verificar se é do dentista logado
+          const isMyPatient = p.profissional_id ? 
+            String(p.profissional_id) === String(user.id) :
+            (p.dentist || p.dentista) === user.nome;
+          
+          if (!isMyPatient) return false;
+          
+          // Verificar se é da data selecionada
+          const d = parseDate(p.data_hora);
+          return d ? isSameDay(d, selectedDate) : false;
+        });
+        
+        setMyPatients(filtered);
       } finally {
-        setLoadingAppointments(false);
+        setLoading(false);
       }
     };
-    fetchMyAppointments();
-  }, [selectedDate, user?.id]);
-
-  // Mescla agendamentos da API com pacientes locais do contexto
-  // Prioridade: API (dados reais) > contexto local (mock/pending)
-  useEffect(() => {
-    if (apiAppointments.length > 0) {
-      // Usa dados da API — já filtrados pelo JWT (profissional_id = user.id)
-      const sorted = [...apiAppointments].sort((a, b) => {
-        const da = parseDate(a.data_hora);
-        const db = parseDate(b.data_hora);
-        if (!da || !db) return 0;
-        return da - db;
-      });
-      setMyPatients(sorted);
-    } else {
-      // Fallback: filtra contexto local pelo profissional_id OU nome do dentista
-      const filtered = patients.filter(p => {
-        // Verifica por ID (dado vindo da API)
-        if (p.profissional_id && user?.id) {
-          if (String(p.profissional_id) !== String(user.id)) return false;
-        } else {
-          // Fallback por nome (dado mock/local)
-          const dentistaNome = p.dentist || p.dentista || '';
-          if (dentistaNome && user?.nome && dentistaNome !== user.nome) return false;
-        }
-        // Filtra por data selecionada
-        if (p.status === 'cancelado') return false;
-        const d = parseDate(p.data_hora);
-        return d ? isSameDay(d, selectedDate) : false;
-      });
-      const sorted = [...filtered].sort((a, b) => {
-        const da = parseDate(a.data_hora);
-        const db = parseDate(b.data_hora);
-        if (!da || !db) return 0;
-        return da - db;
-      });
-      setMyPatients(sorted);
-    }
-  }, [apiAppointments, patients, user, selectedDate]);
+    
+    loadPatients();
+  }, [selectedDate, user?.id, patients]);
 
   const handleUpdateProgress = async () => {
     if (!selectedPatient) return;
     const steps = getSteps(selectedPatient.procedimento || selectedPatient.procedureType);
-    updatePatientProgress(selectedPatient.id, newProgress);
+    await updatePatientProgress(selectedPatient.id, newProgress);
     if (newProgress >= steps.length - 1) {
       await updatePatientStatus(selectedPatient.id, 'finalizado');
     }
@@ -125,11 +122,17 @@ const DentistSchedulePanel = () => {
     await updatePatientStatus(patient.id, 'em_procedimento');
   };
 
-  // Extrai campos independente de vir da API ou do contexto local
-  const getNome      = (p) => p.paciente?.nome || p.nome || p.name || '?';
-  const getProcedure = (p) => p.procedimento?.nome || p.procedimento || p.procedureType || '—';
-  const getTelefone  = (p) => p.paciente?.telefone || p.telefone || p.phone || '';
-  const getObs       = (p) => p.observacoes || p.observations || '';
+  const getNome = (p) => p.paciente?.nome || p.nome || p.name || '?';
+  const getProcedureName = (p) => {
+    if (!p) return '—';
+    if (p.procedimento?.nome) return p.procedimento.nome;
+    if (p.procedureType?.nome) return p.procedureType.nome;
+    if (typeof p.procedimento === 'string') return p.procedimento;
+    if (typeof p.procedureType === 'string') return p.procedureType;
+    return '—';
+  };
+  const getTelefone = (p) => p.paciente?.telefone || p.telefone || p.phone || '';
+  const getObs = (p) => p.observacoes || p.observations || '';
 
   return (
     <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={ptBR}>
@@ -167,23 +170,24 @@ const DentistSchedulePanel = () => {
         )}
 
         {/* Loading */}
-        {loadingAppointments && (
+        {loading && (
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
             <CircularProgress />
           </Box>
         )}
 
         {/* Grid de pacientes */}
-        {!loadingAppointments && (
+        {!loading && (
           <Grid container spacing={3}>
             {myPatients.length > 0 ? (
               myPatients.map(patient => {
-                const steps       = getSteps(getProcedure(patient));
+                const nome = getNome(patient);
+                const procedureName = getProcedureName(patient);
+                const steps = getSteps(procedureName);
                 const currentStep = patient.procedureProgress || 0;
                 const isCompleted = patient.status === 'finalizado';
                 const isInProgress = patient.status === 'em_procedimento';
-                const apptDate    = parseDate(patient.data_hora);
-                const nome        = getNome(patient);
+                const apptDate = parseDate(patient.data_hora);
 
                 return (
                   <Grid item xs={12} md={6} key={patient.id}>
@@ -198,7 +202,7 @@ const DentistSchedulePanel = () => {
                             <Box>
                               <Typography variant="h6">{nome}</Typography>
                               <Typography variant="body2" color="text.secondary">
-                                {getProcedure(patient)}
+                                {procedureName}
                               </Typography>
                             </Box>
                           </Box>
@@ -214,7 +218,7 @@ const DentistSchedulePanel = () => {
 
                         {/* Detalhes */}
                         <Typography variant="body2" gutterBottom>
-                          <strong>Procedimento:</strong> {getProcedure(patient)}
+                          <strong>Procedimento:</strong> {procedureName}
                         </Typography>
                         {getTelefone(patient) && (
                           <Typography variant="body2" gutterBottom>
@@ -308,7 +312,7 @@ const DentistSchedulePanel = () => {
                   <strong>Paciente:</strong> {getNome(selectedPatient)}
                 </Typography>
                 <Typography variant="body2" gutterBottom>
-                  <strong>Procedimento:</strong> {getProcedure(selectedPatient)}
+                  <strong>Procedimento:</strong> {getProcedureName(selectedPatient)}
                 </Typography>
                 <FormControl fullWidth sx={{ mt: 2 }}>
                   <InputLabel>Etapa Atual</InputLabel>
@@ -317,7 +321,7 @@ const DentistSchedulePanel = () => {
                     label="Etapa Atual"
                     onChange={(e) => setNewProgress(e.target.value)}
                   >
-                    {getSteps(getProcedure(selectedPatient)).map((step, index) => (
+                    {getSteps(getProcedureName(selectedPatient)).map((step, index) => (
                       <MenuItem key={step} value={index}>
                         {index + 1}. {step}
                       </MenuItem>
